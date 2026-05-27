@@ -217,7 +217,24 @@ internal static class NativeMethods
     private struct InputUnion
     {
         [FieldOffset(0)]
+        public MouseInput Mouse;
+
+        [FieldOffset(0)]
         public KeyboardInput Keyboard;
+
+        [FieldOffset(0)]
+        public HardwareInput Hardware;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int Dx;
+        public int Dy;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -228,5 +245,13 @@ internal static class NativeMethods
         public uint Flags;
         public uint Time;
         public UIntPtr ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HardwareInput
+    {
+        public uint Msg;
+        public ushort ParamL;
+        public ushort ParamH;
     }
 }
