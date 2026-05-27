@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     private ScrollerSettings _settings;
     private SwitchResult? _lastSwitch;
     private bool _allowClose;
-    private bool _isLoading;
+    private bool _isLoading = true;
 
     public MainWindow()
     {

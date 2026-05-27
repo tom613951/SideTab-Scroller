@@ -329,6 +329,7 @@ paket-files/
 .fake/
 .dotnet/
 .tools/
+artifacts/
 
 # CodeRush personal settings
 .cr/personal
