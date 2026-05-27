@@ -14,7 +14,7 @@ public partial class App : System.Windows.Application
             ErrorLog.Write(args.Exception);
             System.Windows.MessageBox.Show(
                 ErrorLog.Format(args.Exception),
-                "SideTab Scroller",
+                "侧栏滚轮切换标签",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             args.Handled = true;
@@ -39,7 +39,7 @@ public partial class App : System.Windows.Application
             ErrorLog.Write(exception);
             System.Windows.MessageBox.Show(
                 ErrorLog.Format(exception),
-                "SideTab Scroller",
+                "侧栏滚轮切换标签",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);

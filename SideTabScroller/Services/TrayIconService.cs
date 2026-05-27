@@ -1,46 +1,88 @@
 using SideTabScroller.Models;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
+using WpfApplication = System.Windows.Application;
 
 namespace SideTabScroller.Services;
 
 internal sealed class TrayIconService : IDisposable
 {
     private readonly Forms.NotifyIcon _notifyIcon;
-    private readonly Forms.ToolStripMenuItem _toggleEnabledItem;
+    private readonly Drawing.Icon _icon;
+    private readonly Action _showSettings;
+    private readonly Action _toggleEnabled;
+    private readonly Action _exitApplication;
+    private TrayMenuWindow? _trayMenuWindow;
+    private ScrollerSettings? _settings;
+    private bool _hookRunning;
 
     public TrayIconService(Action showSettings, Action toggleEnabled, Action exitApplication)
     {
-        _toggleEnabledItem = new Forms.ToolStripMenuItem("Disable", null, (_, _) => toggleEnabled());
-        var openItem = new Forms.ToolStripMenuItem("Settings", null, (_, _) => showSettings());
-        var exitItem = new Forms.ToolStripMenuItem("Exit", null, (_, _) => exitApplication());
-        var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add(openItem);
-        menu.Items.Add(_toggleEnabledItem);
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(exitItem);
+        _showSettings = showSettings;
+        _toggleEnabled = toggleEnabled;
+        _exitApplication = exitApplication;
+        _icon = LoadIcon();
 
         _notifyIcon = new Forms.NotifyIcon
         {
-            Icon = Drawing.SystemIcons.Application,
-            Text = "SideTab Scroller",
-            Visible = true,
-            ContextMenuStrip = menu
+            Icon = _icon,
+            Text = "侧栏滚轮切换标签",
+            Visible = true
         };
+
+        _notifyIcon.MouseUp += NotifyIcon_MouseUp;
         _notifyIcon.DoubleClick += (_, _) => showSettings();
     }
 
     public void Update(ScrollerSettings settings, bool hookRunning)
     {
-        _toggleEnabledItem.Text = settings.Enabled ? "Disable" : "Enable";
+        _settings = settings;
+        _hookRunning = hookRunning;
         _notifyIcon.Text = hookRunning
-            ? settings.Enabled ? "SideTab Scroller - listening" : "SideTab Scroller - disabled"
-            : "SideTab Scroller - hook unavailable";
+            ? settings.Enabled ? "侧栏滚轮切换标签 - 正在监听" : "侧栏滚轮切换标签 - 已停用"
+            : "侧栏滚轮切换标签 - 钩子不可用";
+        _trayMenuWindow?.Update(settings, hookRunning);
     }
 
     public void Dispose()
     {
+        _trayMenuWindow?.Close();
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
+        _icon.Dispose();
+    }
+
+    private void NotifyIcon_MouseUp(object? sender, Forms.MouseEventArgs e)
+    {
+        if (e.Button == Forms.MouseButtons.Right)
+        {
+            WpfApplication.Current.Dispatcher.Invoke(ShowWin11Menu);
+        }
+    }
+
+    private void ShowWin11Menu()
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        _trayMenuWindow?.Close();
+        _trayMenuWindow = new TrayMenuWindow(_showSettings, _toggleEnabled, _exitApplication);
+        _trayMenuWindow.Closed += (_, _) => _trayMenuWindow = null;
+        _trayMenuWindow.Update(_settings, _hookRunning);
+        _trayMenuWindow.ShowNearCursor();
+    }
+
+    private static Drawing.Icon LoadIcon()
+    {
+        var resource = WpfApplication.GetResourceStream(new Uri("pack://application:,,,/Assets/app.ico"));
+        if (resource is null)
+        {
+            return (Drawing.Icon)Drawing.SystemIcons.Application.Clone();
+        }
+
+        using var stream = resource.Stream;
+        return new Drawing.Icon(stream);
     }
 }

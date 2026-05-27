@@ -12,6 +12,12 @@
     <Version>0.1.0</Version>
     <Authors>SideTabScroller contributors</Authors>
     <Description>Switch Chromium side tabs with the mouse wheel on Windows.</Description>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Assets\app.ico" />
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
 </Project>

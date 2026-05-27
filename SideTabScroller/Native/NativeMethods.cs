@@ -40,6 +40,9 @@ internal static class NativeMethods
     internal static extern IntPtr GetModuleHandle(string? moduleName);
 
     [DllImport("user32.dll")]
+    internal static extern uint GetDpiForSystem();
+
+    [DllImport("user32.dll")]
     internal static extern IntPtr WindowFromPoint(NativePoint point);
 
     [DllImport("user32.dll")]

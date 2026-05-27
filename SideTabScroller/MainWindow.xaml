@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SideTabScroller"
         mc:Ignorable="d"
-        Title="SideTab Scroller"
+        Title="侧栏滚轮切换标签"
         Height="720"
         Width="980"
         MinHeight="640"
@@ -14,7 +14,8 @@
         Background="{StaticResource AppBackgroundBrush}"
         FontFamily="Segoe UI Variable Display, Segoe UI"
         Loaded="Window_Loaded"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        Icon="Assets/app.ico">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -32,10 +33,10 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="SideTab Scroller"
+                    <TextBlock Text="侧栏滚轮切换标签"
                                FontSize="30"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Edge / Chrome side tab wheel switching"
+                    <TextBlock Text="在 Edge / Chrome 侧边标签栏上滚动鼠标滚轮即可切换标签页"
                                Foreground="{StaticResource MutedInkBrush}"
                                FontSize="14"
                                Margin="1,6,0,0" />
@@ -46,7 +47,7 @@
                           VerticalAlignment="Center"
                           Checked="SettingsControl_Changed"
                           Unchecked="SettingsControl_Changed"
-                          Content="Enabled" />
+                          Content="已启用" />
             </Grid>
         </Border>
 
@@ -61,26 +62,26 @@
                 <StackPanel Grid.Column="0">
                     <Border Style="{StaticResource SectionPanelStyle}">
                         <StackPanel>
-                            <TextBlock Text="Detection Area"
+                            <TextBlock Text="感应区域"
                                        FontSize="18"
                                        FontWeight="SemiBold" />
-                            <TextBlock Text="Sidebar side"
+                            <TextBlock Text="侧边栏位置"
                                        Foreground="{StaticResource MutedInkBrush}"
                                        Margin="0,18,0,8" />
                             <StackPanel Orientation="Horizontal">
                                 <RadioButton x:Name="SidebarAutoRadio"
                                              GroupName="SidebarSide"
-                                             Content="Auto"
+                                             Content="自动"
                                              Style="{StaticResource SegmentRadioStyle}"
                                              Checked="SideRadio_Checked" />
                                 <RadioButton x:Name="SidebarLeftRadio"
                                              GroupName="SidebarSide"
-                                             Content="Left"
+                                             Content="左侧"
                                              Style="{StaticResource SegmentRadioStyle}"
                                              Checked="SideRadio_Checked" />
                                 <RadioButton x:Name="SidebarRightRadio"
                                              GroupName="SidebarSide"
-                                             Content="Right"
+                                             Content="右侧"
                                              Style="{StaticResource SegmentRadioStyle}"
                                              Checked="SideRadio_Checked" />
                             </StackPanel>
@@ -90,7 +91,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Sidebar width" Foreground="{StaticResource MutedInkBrush}" />
+                                <TextBlock Text="侧边栏宽度" Foreground="{StaticResource MutedInkBrush}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding ElementName=SidebarWidthSlider, Path=Value, StringFormat={}{0:0}px}"
                                            Foreground="{StaticResource MutedInkBrush}" />
@@ -107,7 +108,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Top inset" Foreground="{StaticResource MutedInkBrush}" />
+                                <TextBlock Text="顶部避让" Foreground="{StaticResource MutedInkBrush}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding ElementName=TopInsetSlider, Path=Value, StringFormat={}{0:0}px}"
                                            Foreground="{StaticResource MutedInkBrush}" />
@@ -124,7 +125,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Bottom inset" Foreground="{StaticResource MutedInkBrush}" />
+                                <TextBlock Text="底部避让" Foreground="{StaticResource MutedInkBrush}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding ElementName=BottomInsetSlider, Path=Value, StringFormat={}{0:0}px}"
                                            Foreground="{StaticResource MutedInkBrush}" />
@@ -140,32 +141,32 @@
 
                     <Border Style="{StaticResource SectionPanelStyle}">
                         <StackPanel>
-                            <TextBlock Text="Behavior"
+                            <TextBlock Text="行为"
                                        FontSize="18"
                                        FontWeight="SemiBold"
                                        Margin="0,0,0,18" />
                             <CheckBox x:Name="ReverseSwitch"
-                                      Content="Reverse direction"
+                                      Content="反转滚动方向"
                                       Style="{StaticResource SwitchCheckBoxStyle}"
                                       Checked="SettingsControl_Changed"
                                       Unchecked="SettingsControl_Changed" />
                             <CheckBox x:Name="SwallowWheelSwitch"
-                                      Content="Consume handled wheel events"
+                                      Content="拦截已处理的滚轮事件"
                                       Style="{StaticResource SwitchCheckBoxStyle}"
                                       Checked="SettingsControl_Changed"
                                       Unchecked="SettingsControl_Changed" />
                             <CheckBox x:Name="IgnoreModifiersSwitch"
-                                      Content="Ignore when keyboard modifiers are pressed"
+                                      Content="按住 Ctrl / Alt / Shift / Win 时忽略滚轮"
                                       Style="{StaticResource SwitchCheckBoxStyle}"
                                       Checked="SettingsControl_Changed"
                                       Unchecked="SettingsControl_Changed" />
                             <CheckBox x:Name="AutofocusSwitch"
-                                      Content="Autofocus browser window"
+                                      Content="自动聚焦浏览器窗口"
                                       Style="{StaticResource SwitchCheckBoxStyle}"
                                       Checked="SettingsControl_Changed"
                                       Unchecked="SettingsControl_Changed" />
                             <CheckBox x:Name="RestoreFocusSwitch"
-                                      Content="Restore previous focus"
+                                      Content="切换后恢复原窗口焦点"
                                       Style="{StaticResource SwitchCheckBoxStyle}"
                                       Checked="SettingsControl_Changed"
                                       Unchecked="SettingsControl_Changed" />
@@ -175,7 +176,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Focus delay" Foreground="{StaticResource MutedInkBrush}" />
+                                <TextBlock Text="聚焦等待" Foreground="{StaticResource MutedInkBrush}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding ElementName=FocusDelaySlider, Path=Value, StringFormat={}{0:0}ms}"
                                            Foreground="{StaticResource MutedInkBrush}" />
@@ -193,7 +194,7 @@
                 <StackPanel Grid.Column="2">
                     <Border Style="{StaticResource SectionPanelStyle}">
                         <StackPanel>
-                            <TextBlock Text="Browser Targets"
+                            <TextBlock Text="浏览器进程"
                                        FontSize="18"
                                        FontWeight="SemiBold" />
                             <TextBox x:Name="BrowserProcessesBox"
@@ -210,12 +211,12 @@
 
                     <Border Style="{StaticResource SectionPanelStyle}">
                         <StackPanel>
-                            <TextBlock Text="Startup"
+                            <TextBlock Text="开机启动"
                                        FontSize="18"
                                        FontWeight="SemiBold"
                                        Margin="0,0,0,18" />
                             <CheckBox x:Name="StartupSwitch"
-                                      Content="Run at sign-in"
+                                      Content="登录 Windows 后自动运行"
                                       Style="{StaticResource SwitchCheckBoxStyle}"
                                       Checked="StartupSwitch_Changed"
                                       Unchecked="StartupSwitch_Changed" />
@@ -227,7 +228,7 @@
 
                     <Border Style="{StaticResource SectionPanelStyle}">
                         <StackPanel>
-                            <TextBlock Text="Status"
+                            <TextBlock Text="状态"
                                        FontSize="18"
                                        FontWeight="SemiBold" />
                             <TextBlock x:Name="StatusText"
@@ -240,11 +241,11 @@
                                        Margin="0,10,0,0"
                                        Foreground="{StaticResource MutedInkBrush}" />
                             <WrapPanel Margin="0,22,0,0">
-                                <Button Content="Open config"
+                                <Button Content="打开配置"
                                         Style="{StaticResource SecondaryButtonStyle}"
                                         Margin="0,0,10,10"
                                         Click="OpenConfigButton_Click" />
-                                <Button Content="Reset"
+                                <Button Content="重置"
                                         Style="{StaticResource SecondaryButtonStyle}"
                                         Margin="0,0,10,10"
                                         Click="ResetButton_Click" />

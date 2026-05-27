@@ -155,7 +155,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "Startup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(ex.Message, "开机启动", MessageBoxButton.OK, MessageBoxImage.Warning);
             _isLoading = true;
             StartupSwitch.IsChecked = _startupManager.IsEnabled();
             _isLoading = false;
@@ -230,16 +230,21 @@ public partial class MainWindow : Window
     private void UpdateStatusText()
     {
         StatusText.Text = _mouseWheelHook.IsRunning
-            ? $"Hook active - {(_settings.Enabled ? "listening" : "disabled")}"
-            : $"Hook unavailable - {_mouseWheelHook.LastError ?? "unknown error"}";
+            ? $"鼠标钩子 - {(_settings.Enabled ? "正在监听" : "已停用")}"
+            : $"鼠标钩子不可用 - {_mouseWheelHook.LastError ?? "未知错误"}";
 
         LastActionText.Text = _lastSwitch is null
-            ? "Last switch - none"
-            : $"Last switch - {_lastSwitch.Direction} - {_lastSwitch.BrowserProcessName}.exe - {_lastSwitch.At:HH:mm:ss}";
+            ? "上次切换 - 暂无"
+            : $"上次切换 - {FormatDirection(_lastSwitch.Direction)} - {_lastSwitch.BrowserProcessName}.exe - {_lastSwitch.At:HH:mm:ss}";
 
-        ConfigPathText.Text = $"Config - {_settingsStore.ConfigPath}";
+        ConfigPathText.Text = $"配置文件 - {_settingsStore.ConfigPath}";
         StartupStatusText.Text = _startupManager.IsEnabled()
-            ? "Startup entry is enabled."
-            : "Startup entry is disabled.";
+            ? "开机启动已启用。"
+            : "开机启动未启用。";
+    }
+
+    private static string FormatDirection(SwitchDirection direction)
+    {
+        return direction == SwitchDirection.Previous ? "上一个标签页" : "下一个标签页";
     }
 }
