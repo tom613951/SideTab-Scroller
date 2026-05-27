@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>SideTabScroller</AssemblyName>
+    <RootNamespace>SideTabScroller</RootNamespace>
+    <Version>0.1.0</Version>
+    <Authors>SideTabScroller contributors</Authors>
+    <Description>Switch Chromium side tabs with the mouse wheel on Windows.</Description>
+  </PropertyGroup>
+
+</Project>
