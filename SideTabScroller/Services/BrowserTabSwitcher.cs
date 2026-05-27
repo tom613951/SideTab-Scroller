@@ -85,10 +85,14 @@ internal sealed class BrowserTabSwitcher
             }
         }
 
-        var sent = NativeMethods.SendCtrlPageKey(direction == SwitchDirection.Previous);
+        var previous = direction == SwitchDirection.Previous;
+        var sent = settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage
+            ? NativeMethods.SendCtrlPageKey(previous)
+            : NativeMethods.SendCtrlTabKey(previous);
 
         if (!browserAlreadyForeground && settings.RestorePreviousFocus && previousForeground != IntPtr.Zero)
         {
+            Thread.Sleep(45);
             NativeMethods.SetForegroundWindow(previousForeground);
         }
 

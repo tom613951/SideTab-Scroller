@@ -14,6 +14,7 @@ internal static class NativeMethods
     internal const int DwmwaExtendedFrameBounds = 9;
 
     internal const ushort VkControl = 0x11;
+    internal const ushort VkTab = 0x09;
     internal const ushort VkPrior = 0x21;
     internal const ushort VkNext = 0x22;
     private const ushort VkShift = 0x10;
@@ -137,6 +138,30 @@ internal static class NativeMethods
             CreateKeyInput(pageKey, keyUp: true),
             CreateKeyInput(VkControl, keyUp: true)
         };
+
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
+        return sent == inputs.Length;
+    }
+
+    internal static bool SendCtrlTabKey(bool previous)
+    {
+        var inputs = previous
+            ? new[]
+            {
+                CreateKeyInput(VkControl, keyUp: false),
+                CreateKeyInput(VkShift, keyUp: false),
+                CreateKeyInput(VkTab, keyUp: false),
+                CreateKeyInput(VkTab, keyUp: true),
+                CreateKeyInput(VkShift, keyUp: true),
+                CreateKeyInput(VkControl, keyUp: true)
+            }
+            : new[]
+            {
+                CreateKeyInput(VkControl, keyUp: false),
+                CreateKeyInput(VkTab, keyUp: false),
+                CreateKeyInput(VkTab, keyUp: true),
+                CreateKeyInput(VkControl, keyUp: true)
+            };
 
         var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
         return sent == inputs.Length;

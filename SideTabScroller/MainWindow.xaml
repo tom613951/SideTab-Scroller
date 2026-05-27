@@ -145,6 +145,21 @@
                                        FontSize="18"
                                        FontWeight="SemiBold"
                                        Margin="0,0,0,18" />
+                            <TextBlock Text="切换快捷键"
+                                       Foreground="{StaticResource MutedInkBrush}"
+                                       Margin="0,0,0,8" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                <RadioButton x:Name="ShortcutCtrlTabRadio"
+                                             GroupName="ShortcutMode"
+                                             Content="Ctrl+Tab"
+                                             Style="{StaticResource SegmentRadioStyle}"
+                                             Checked="ShortcutModeRadio_Checked" />
+                                <RadioButton x:Name="ShortcutCtrlPageRadio"
+                                             GroupName="ShortcutMode"
+                                             Content="Ctrl+Page"
+                                             Style="{StaticResource SegmentRadioStyle}"
+                                             Checked="ShortcutModeRadio_Checked" />
+                            </StackPanel>
                             <CheckBox x:Name="ReverseSwitch"
                                       Content="反转滚动方向"
                                       Style="{StaticResource SwitchCheckBoxStyle}"

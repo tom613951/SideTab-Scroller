@@ -9,6 +9,7 @@ public sealed class ScrollerSettings
     public bool AutofocusBrowser { get; set; } = true;
     public bool RestorePreviousFocus { get; set; } = true;
     public SidebarSide SidebarSide { get; set; } = SidebarSide.Auto;
+    public TabSwitchShortcutMode ShortcutMode { get; set; } = TabSwitchShortcutMode.CtrlTab;
     public int SidebarWidth { get; set; } = 104;
     public int TopInset { get; set; } = 64;
     public int BottomInset { get; set; } = 8;

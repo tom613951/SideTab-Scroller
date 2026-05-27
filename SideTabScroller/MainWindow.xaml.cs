@@ -84,6 +84,8 @@ public partial class MainWindow : Window
         SidebarAutoRadio.IsChecked = _settings.SidebarSide == SidebarSide.Auto;
         SidebarLeftRadio.IsChecked = _settings.SidebarSide == SidebarSide.Left;
         SidebarRightRadio.IsChecked = _settings.SidebarSide == SidebarSide.Right;
+        ShortcutCtrlTabRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlTab;
+        ShortcutCtrlPageRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage;
 
         _isLoading = false;
     }
@@ -120,6 +122,10 @@ public partial class MainWindow : Window
             _settings.SidebarSide = SidebarSide.Auto;
         }
 
+        _settings.ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
+            ? TabSwitchShortcutMode.CtrlPage
+            : TabSwitchShortcutMode.CtrlTab;
+
         _settings.Normalize();
         _settingsStore.Save(_settings);
         _trayIcon.Update(_settings, _mouseWheelHook.IsRunning);
@@ -139,6 +145,8 @@ public partial class MainWindow : Window
     private void SettingsControl_Changed(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
     private void SideRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
+
+    private void ShortcutModeRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
     private void BrowserProcessesBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => PersistSettingsFromUi();
 
