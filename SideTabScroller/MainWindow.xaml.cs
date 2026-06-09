@@ -7,7 +7,7 @@ using SideTabScroller.Services;
 
 namespace SideTabScroller;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly SettingsStore _settingsStore;
     private readonly StartupManager _startupManager;
@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this);
 
         _settingsStore = new SettingsStore();
         _settings = _settingsStore.Load();
@@ -33,7 +34,8 @@ public partial class MainWindow : Window
         _trayIcon = new TrayIconService(
             showSettings: ShowSettingsWindow,
             toggleEnabled: ToggleEnabled,
-            exitApplication: ExitApplication);
+            exitApplication: ExitApplication,
+            showContextMenu: ShowTrayContextMenu);
 
         ApplySettingsToUi();
         _mouseWheelHook.Start();
@@ -81,9 +83,6 @@ public partial class MainWindow : Window
         BrowserProcessesBox.Text = string.Join(Environment.NewLine, _settings.BrowserProcessNames);
         StartupSwitch.IsChecked = _startupManager.IsEnabled();
 
-        SidebarAutoRadio.IsChecked = _settings.SidebarSide == SidebarSide.Auto;
-        SidebarLeftRadio.IsChecked = _settings.SidebarSide == SidebarSide.Left;
-        SidebarRightRadio.IsChecked = _settings.SidebarSide == SidebarSide.Right;
         ShortcutCtrlTabRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlTab;
         ShortcutCtrlPageRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage;
 
@@ -109,18 +108,7 @@ public partial class MainWindow : Window
         _settings.FocusDelayMilliseconds = (int)Math.Round(FocusDelaySlider.Value);
         _settings.BrowserProcessNames = ParseBrowserProcessNames(BrowserProcessesBox.Text);
 
-        if (SidebarLeftRadio.IsChecked == true)
-        {
-            _settings.SidebarSide = SidebarSide.Left;
-        }
-        else if (SidebarRightRadio.IsChecked == true)
-        {
-            _settings.SidebarSide = SidebarSide.Right;
-        }
-        else
-        {
-            _settings.SidebarSide = SidebarSide.Auto;
-        }
+        _settings.SidebarSide = SidebarSide.Left;
 
         _settings.ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
             ? TabSwitchShortcutMode.CtrlPage
@@ -143,8 +131,6 @@ public partial class MainWindow : Window
     }
 
     private void SettingsControl_Changed(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
-
-    private void SideRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
     private void ShortcutModeRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
@@ -255,4 +241,33 @@ public partial class MainWindow : Window
     {
         return direction == SwitchDirection.Previous ? "上一个标签页" : "下一个标签页";
     }
+
+    public void ShowTrayContextMenu()
+    {
+        var menu = (System.Windows.Controls.ContextMenu)Resources["TrayContextMenu"];
+        
+        var headerItem = (System.Windows.Controls.MenuItem)menu.Items[0];
+        var headerStack = (System.Windows.Controls.StackPanel)headerItem.Header;
+        var statusTextBlock = (System.Windows.Controls.TextBlock)headerStack.Children[1];
+        
+        statusTextBlock.Text = _mouseWheelHook.IsRunning
+            ? _settings.Enabled ? "正在监听侧边栏滚轮" : "已停用"
+            : "鼠标钩子不可用";
+
+        var toggleItem = (System.Windows.Controls.MenuItem)menu.Items[3];
+        toggleItem.Header = _settings.Enabled ? "停用" : "启用";
+        
+        var toggleIcon = (Wpf.Ui.Controls.SymbolIcon)toggleItem.Icon;
+        toggleIcon.Symbol = _settings.Enabled ? Wpf.Ui.Controls.SymbolRegular.Pause24 : Wpf.Ui.Controls.SymbolRegular.Play24;
+
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.IsOpen = true;
+
+        var helper = new System.Windows.Interop.WindowInteropHelper(this);
+        Native.NativeMethods.SetForegroundWindow(helper.Handle);
+    }
+
+    private void TraySettings_Click(object sender, System.Windows.RoutedEventArgs e) => ShowSettingsWindow();
+    private void TrayToggle_Click(object sender, System.Windows.RoutedEventArgs e) => ToggleEnabled();
+    private void TrayExit_Click(object sender, System.Windows.RoutedEventArgs e) => ExitApplication();
 }

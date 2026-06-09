@@ -12,15 +12,16 @@ internal sealed class TrayIconService : IDisposable
     private readonly Action _showSettings;
     private readonly Action _toggleEnabled;
     private readonly Action _exitApplication;
-    private TrayMenuWindow? _trayMenuWindow;
+    private readonly Action _showContextMenu;
     private ScrollerSettings? _settings;
     private bool _hookRunning;
 
-    public TrayIconService(Action showSettings, Action toggleEnabled, Action exitApplication)
+    public TrayIconService(Action showSettings, Action toggleEnabled, Action exitApplication, Action showContextMenu)
     {
         _showSettings = showSettings;
         _toggleEnabled = toggleEnabled;
         _exitApplication = exitApplication;
+        _showContextMenu = showContextMenu;
         _icon = LoadIcon();
 
         _notifyIcon = new Forms.NotifyIcon
@@ -41,12 +42,10 @@ internal sealed class TrayIconService : IDisposable
         _notifyIcon.Text = hookRunning
             ? settings.Enabled ? "侧栏滚轮切换标签 - 正在监听" : "侧栏滚轮切换标签 - 已停用"
             : "侧栏滚轮切换标签 - 钩子不可用";
-        _trayMenuWindow?.Update(settings, hookRunning);
     }
 
     public void Dispose()
     {
-        _trayMenuWindow?.Close();
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
         _icon.Dispose();
@@ -56,22 +55,8 @@ internal sealed class TrayIconService : IDisposable
     {
         if (e.Button == Forms.MouseButtons.Right)
         {
-            WpfApplication.Current.Dispatcher.Invoke(ShowWin11Menu);
+            WpfApplication.Current.Dispatcher.Invoke(_showContextMenu);
         }
-    }
-
-    private void ShowWin11Menu()
-    {
-        if (_settings is null)
-        {
-            return;
-        }
-
-        _trayMenuWindow?.Close();
-        _trayMenuWindow = new TrayMenuWindow(_showSettings, _toggleEnabled, _exitApplication);
-        _trayMenuWindow.Closed += (_, _) => _trayMenuWindow = null;
-        _trayMenuWindow.Update(_settings, _hookRunning);
-        _trayMenuWindow.ShowNearCursor();
     }
 
     private static Drawing.Icon LoadIcon()

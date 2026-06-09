@@ -33,17 +33,8 @@ internal sealed class StartupManager
 
     private static string GetExecutablePath()
     {
-        var assemblyPath = Assembly.GetEntryAssembly()?.Location;
-        if (!string.IsNullOrWhiteSpace(assemblyPath))
-        {
-            var companionExe = Path.ChangeExtension(assemblyPath, ".exe");
-            if (File.Exists(companionExe))
-            {
-                return companionExe;
-            }
-        }
-
         return Environment.ProcessPath
+            ?? Assembly.GetEntryAssembly()?.Location
             ?? throw new InvalidOperationException("Cannot resolve the application executable path.");
     }
 }
