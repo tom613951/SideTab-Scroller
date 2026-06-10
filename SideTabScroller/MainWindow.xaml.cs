@@ -49,10 +49,6 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        if (Environment.GetCommandLineArgs().Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
-        {
-            Hide();
-        }
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using SideTabScroller.Services;
 
@@ -32,7 +33,11 @@ public partial class App : System.Windows.Application
         {
             var window = new MainWindow();
             MainWindow = window;
-            window.Show();
+
+            if (!e.Args.Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
+            {
+                window.Show();
+            }
         }
         catch (Exception exception)
         {
