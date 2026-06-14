@@ -12,6 +12,9 @@ SideTab Scroller 是一款 Windows 桌面实用小工具，当你的鼠标指针
 - **高度可定制化**：可自定义侧栏感应宽度、顶部留空（Top inset）和底部留空（Bottom inset）。
 - **自动对焦与恢复**：可选自动激活浏览器窗口并在完成切换后恢复之前的窗口焦点。
 - **现代化 UI 设计**：使用基于 **WPF UI** 的全新 Windows 11 / WinUI 3 风格设置界面，支持 Mica 材质背景，并带有原生 Fluent 样式的系统托盘右键菜单。
+- **管理员权限运行（完美兼容）**：默认以管理员权限运行，以绕过 Windows UIPI 限制，确保在任何置顶的高权限软件（如代理客户端 `GUI.for.SingBox`、各类调试终端、游戏等）处于焦点状态时均能正常工作。
+- **任务计划程序开机启动**：开机自启机制升级为通过 **Windows 任务计划程序 (Task Scheduler)** 注册，在用户登录时静默提权启动，彻底解决 Windows 安全策略对高权限程序注册表启动项的拦截。
+- **高性能与透明遮罩穿透**：通过 Win32 原生 `OpenProcess` API 搭配高速线程安全缓存实现无延迟解析，解决滚轮触发时的鼠标移动卡顿；引入 Z 轴窗口深度遍历机制，即便侧栏上方被其他软件的透明/半透明遮罩覆盖，仍能精准识别底层浏览器。
 - **本地配置存储**：采用 JSON 配置文件，存储在 `%APPDATA%\SideTabScroller\settings.json`。
 
 ## 构建与发布
@@ -36,13 +39,12 @@ dotnet publish .\SideTabScroller\SideTabScroller.csproj -c Release -r win-x64 --
 
 ## 使用方法
 
-1. 启动 `SideTabScroller.exe`。
+1. 启动 `SideTabScroller.exe`（请同意系统的 UAC 管理员提权提示）。
 2. 在浏览器中启用**垂直标签页**（侧栏标签）。
 3. 将鼠标悬停在侧栏标签区域，滚动鼠标滚轮。
 4. 如果你的浏览器主题、工具栏密度或侧栏宽度与默认值不同，可以在设置窗口中调整 `Sidebar width`（侧栏宽度）、`Top inset`（顶部留空）和 `Bottom inset`（底部留空）等参数。
 
-*提示：如果浏览器当前未处于焦点状态，开启 `Autofocus browser window`（自动聚焦浏览器窗口）会在发送标签切换快捷键前短暂将浏览器置顶。如果由于管理员权限不同（如以管理员身份运行了浏览器）导致 Windows 限制跨进程焦点切换，建议以管理员身份运行 SideTab Scroller。*
-
 ## 开源协议
 
 GPL-3.0-only。详见 [LICENSE](LICENSE)。
+
