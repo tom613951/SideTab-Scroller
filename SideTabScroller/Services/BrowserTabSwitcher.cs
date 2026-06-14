@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Linq;
 using SideTabScroller.Models;
 using SideTabScroller.Native;
 
@@ -122,50 +124,112 @@ internal sealed class BrowserTabSwitcher
         return false;
     }
 
+    private static readonly ConcurrentDictionary<uint, (string Name, long ExpiryTicks)> ProcessNameCache = new();
+
+    private static string? GetProcessNameWithCache(uint processId)
+    {
+        var now = DateTime.UtcNow.Ticks;
+        if (ProcessNameCache.TryGetValue(processId, out var cached) && cached.ExpiryTicks > now)
+        {
+            return cached.Name;
+        }
+
+        var name = NativeMethods.GetProcessName(processId);
+        if (name != null)
+        {
+            var expiry = now + TimeSpan.FromSeconds(3).Ticks;
+            ProcessNameCache[processId] = (name, expiry);
+
+            // Clean up expired entries occasionally (1% chance)
+            if (Random.Shared.Next(100) == 0)
+            {
+                var expiredKeys = ProcessNameCache.Where(kvp => kvp.Value.ExpiryTicks <= now).Select(kvp => kvp.Key).ToList();
+                foreach (var key in expiredKeys)
+                {
+                    ProcessNameCache.TryRemove(key, out _);
+                }
+            }
+
+            return name;
+        }
+
+        return null;
+    }
+
+    private static bool IsBrowserWindow(IntPtr hWnd, ScrollerSettings settings, out string processName, out NativeRect bounds)
+    {
+        processName = string.Empty;
+        bounds = default;
+
+        if (hWnd == IntPtr.Zero || !NativeMethods.IsWindowVisible(hWnd))
+        {
+            return false;
+        }
+
+        var className = NativeMethods.GetWindowClassName(hWnd);
+        if (!className.StartsWith(ChromiumWindowClassPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        NativeMethods.GetWindowThreadProcessId(hWnd, out var processId);
+        if (processId == 0)
+        {
+            return false;
+        }
+
+        var name = GetProcessNameWithCache(processId);
+        if (name == null || !settings.BrowserProcessNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!NativeMethods.TryGetVisibleWindowBounds(hWnd, out bounds))
+        {
+            return false;
+        }
+
+        processName = name;
+        return true;
+    }
+
     private static bool TryResolveBrowserWindow(NativePoint point, ScrollerSettings settings, out BrowserWindow browserWindow)
     {
+        // 1. Try resolving window directly under cursor (fast path)
         var start = NativeMethods.WindowFromPoint(point);
         foreach (var candidate in EnumerateWindowCandidates(start))
         {
-            if (candidate == IntPtr.Zero || !NativeMethods.IsWindowVisible(candidate))
+            if (IsBrowserWindow(candidate, settings, out var processName, out var bounds))
             {
-                continue;
+                browserWindow = new BrowserWindow(candidate, processName, bounds);
+                return true;
             }
+        }
 
-            var className = NativeMethods.GetWindowClassName(candidate);
-            if (!className.StartsWith(ChromiumWindowClassPrefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
+        // 2. Fallback: Enumerate top-level windows in Z-order to find browser window containing the point (overlay workaround)
+        IntPtr foundHandle = IntPtr.Zero;
+        string foundProcessName = string.Empty;
+        NativeRect foundBounds = default;
 
-            NativeMethods.GetWindowThreadProcessId(candidate, out var processId);
-            if (processId == 0)
+        NativeMethods.EnumWindows((hWnd, lParam) =>
+        {
+            if (IsBrowserWindow(hWnd, settings, out var procName, out var rect))
             {
-                continue;
+                if (point.X >= rect.Left && point.X <= rect.Right &&
+                    point.Y >= rect.Top && point.Y <= rect.Bottom)
+                {
+                    foundHandle = hWnd;
+                    foundProcessName = procName;
+                    foundBounds = rect;
+                    return false; // stop enumeration
+                }
             }
+            return true; // continue enumeration
+        }, IntPtr.Zero);
 
-            string processName;
-            try
-            {
-                using var process = Process.GetProcessById((int)processId);
-                processName = process.ProcessName;
-            }
-            catch
-            {
-                continue;
-            }
-
-            if (!settings.BrowserProcessNames.Contains(processName, StringComparer.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!NativeMethods.TryGetVisibleWindowBounds(candidate, out var bounds))
-            {
-                continue;
-            }
-
-            browserWindow = new BrowserWindow(candidate, processName, bounds);
+        if (foundHandle != IntPtr.Zero)
+        {
+            browserWindow = new BrowserWindow(foundHandle, foundProcessName, foundBounds);
             return true;
         }
 

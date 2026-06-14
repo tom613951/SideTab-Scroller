@@ -25,7 +25,25 @@ internal static class NativeMethods
     private const uint InputKeyboard = 1;
     private const uint KeyEventKeyUp = 0x0002;
 
+    internal const uint ProcessQueryLimitedInformation = 0x1000;
+
     internal delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+    internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, [Out] StringBuilder lpExeName, ref uint lpdwSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseHandle(IntPtr hObject);
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc callback, IntPtr moduleHandle, uint threadId);
@@ -95,6 +113,31 @@ internal static class NativeMethods
         var builder = new StringBuilder(256);
         _ = GetClassName(windowHandle, builder, builder.Capacity);
         return builder.ToString();
+    }
+
+    internal static string? GetProcessName(uint processId)
+    {
+        var hProcess = OpenProcess(ProcessQueryLimitedInformation, false, processId);
+        if (hProcess == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var builder = new StringBuilder(1024);
+            var size = (uint)builder.Capacity;
+            if (QueryFullProcessImageName(hProcess, 0, builder, ref size))
+            {
+                var fullPath = builder.ToString();
+                return System.IO.Path.GetFileNameWithoutExtension(fullPath);
+            }
+            return null;
+        }
+        finally
+        {
+            CloseHandle(hProcess);
+        }
     }
 
     internal static bool TryGetVisibleWindowBounds(IntPtr windowHandle, out NativeRect rect)
