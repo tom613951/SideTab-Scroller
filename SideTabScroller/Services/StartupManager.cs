@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using Microsoft.Win32;
@@ -11,23 +12,71 @@ internal sealed class StartupManager
 
     public bool IsEnabled()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
-        var value = key?.GetValue(ValueName) as string;
-        return value?.Contains(GetExecutablePath(), StringComparison.OrdinalIgnoreCase) == true;
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = "/query /tn \"SideTabScroller\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true
+            };
+            using var process = Process.Start(startInfo);
+            if (process == null) return false;
+            process.WaitForExit();
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void SetEnabled(bool enabled)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true)
-            ?? Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
-
-        if (enabled)
+        // Clean up legacy registry keys
+        try
         {
-            key.SetValue(ValueName, $"\"{GetExecutablePath()}\" --minimized", RegistryValueKind.String);
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+            key?.DeleteValue(ValueName, throwOnMissingValue: false);
         }
-        else
+        catch
         {
-            key.DeleteValue(ValueName, throwOnMissingValue: false);
+            // Ignore legacy cleanup errors
+        }
+
+        try
+        {
+            if (enabled)
+            {
+                var exePath = GetExecutablePath();
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "schtasks.exe",
+                    Arguments = $"/create /tn \"SideTabScroller\" /tr \"\\\"{exePath}\\\" --minimized\" /sc onlogon /rl highest /f",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                using var process = Process.Start(startInfo);
+                process?.WaitForExit();
+            }
+            else
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "schtasks.exe",
+                    Arguments = "/delete /tn \"SideTabScroller\" /f",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                using var process = Process.Start(startInfo);
+                process?.WaitForExit();
+            }
+        }
+        catch
+        {
+            // Fail silently
         }
     }
 
