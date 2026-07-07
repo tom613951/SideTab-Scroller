@@ -76,8 +76,13 @@ internal sealed class BrowserTabSwitcher
         {
             if (IsPointInsideSidebar(point, _browserCache.Bounds, settings, _browserCache.Dpi))
             {
-                _channel.Writer.TryWrite(new WheelTask(_browserCache.Handle, direction, settings, _browserCache.ProcessName, now));
-                return settings.ConsumeHandledWheelEvents;
+                // Verify the window directly under cursor is still this browser (or its child)
+                var currentUnderCursor = NativeMethods.WindowFromPoint(point);
+                if (NativeMethods.IsSameRootWindow(currentUnderCursor, _browserCache.Handle))
+                {
+                    _channel.Writer.TryWrite(new WheelTask(_browserCache.Handle, direction, settings, _browserCache.ProcessName, now));
+                    return settings.ConsumeHandledWheelEvents;
+                }
             }
         }
 
@@ -88,7 +93,12 @@ internal sealed class BrowserTabSwitcher
             if (point.X >= rect.Left && point.X <= rect.Right &&
                 point.Y >= rect.Top && point.Y <= rect.Bottom)
             {
-                return false;
+                // Verify the window directly under cursor is still this non-browser window
+                var currentUnderCursor = NativeMethods.WindowFromPoint(point);
+                if (NativeMethods.IsSameRootWindow(currentUnderCursor, _nonBrowserCache.Handle))
+                {
+                    return false;
+                }
             }
         }
 
@@ -199,10 +209,17 @@ internal sealed class BrowserTabSwitcher
                 _restoreCts?.Cancel();
                 _restoreCts = null;
 
-                // Save previous foreground if we haven't already
-                if (_originalForegroundWindow == IntPtr.Zero)
+                // Save previous foreground if we haven't already AND restore focus is enabled
+                if (settings.RestorePreviousFocus)
                 {
-                    _originalForegroundWindow = previousForeground;
+                    if (_originalForegroundWindow == IntPtr.Zero)
+                    {
+                        _originalForegroundWindow = previousForeground;
+                    }
+                }
+                else
+                {
+                    _originalForegroundWindow = IntPtr.Zero;
                 }
 
                 if (NativeMethods.IsIconic(browserHandle))
@@ -215,6 +232,14 @@ internal sealed class BrowserTabSwitcher
                 {
                     _originalForegroundWindow = IntPtr.Zero;
                     return false;
+                }
+            }
+            else
+            {
+                // If browser is already foreground, and restore focus is disabled, reset stale window
+                if (!settings.RestorePreviousFocus)
+                {
+                    _originalForegroundWindow = IntPtr.Zero;
                 }
             }
 
