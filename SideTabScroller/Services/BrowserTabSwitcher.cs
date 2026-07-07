@@ -383,15 +383,7 @@ internal sealed class BrowserTabSwitcher
             return false;
         }
 
-        var insideLeft = point.X >= bounds.Left && point.X <= bounds.Left + sidebarWidth;
-        var insideRight = point.X <= bounds.Right && point.X >= bounds.Right - sidebarWidth;
-
-        return settings.SidebarSide switch
-        {
-            SidebarSide.Left => insideLeft,
-            SidebarSide.Right => insideRight,
-            _ => insideLeft || insideRight
-        };
+        return point.X >= bounds.Left && point.X <= bounds.Left + sidebarWidth;
     }
 
     private readonly record struct WheelTask(IntPtr BrowserHandle, SwitchDirection Direction, ScrollerSettings Settings, string ProcessName);

@@ -102,9 +102,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _isStartupEnabledCached = _startupManager.IsEnabled();
         StartupSwitch.IsChecked = _isStartupEnabledCached;
 
-        SidebarSideLeftRadio.IsChecked = _settings.SidebarSide == SidebarSide.Left;
-        SidebarSideRightRadio.IsChecked = _settings.SidebarSide == SidebarSide.Right;
-        SidebarSideAutoRadio.IsChecked = _settings.SidebarSide == SidebarSide.Auto;
+
 
         ShortcutCtrlTabRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlTab;
         ShortcutCtrlPageRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage;
@@ -131,18 +129,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _settings.FocusDelayMilliseconds = (int)Math.Round(FocusDelaySlider.Value);
         _settings.BrowserProcessNames = ParseBrowserProcessNames(BrowserProcessesBox.Text);
 
-        if (SidebarSideLeftRadio.IsChecked == true)
-        {
-            _settings.SidebarSide = SidebarSide.Left;
-        }
-        else if (SidebarSideRightRadio.IsChecked == true)
-        {
-            _settings.SidebarSide = SidebarSide.Right;
-        }
-        else
-        {
-            _settings.SidebarSide = SidebarSide.Auto;
-        }
+        _settings.SidebarSide = SidebarSide.Left;
 
         _settings.ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
             ? TabSwitchShortcutMode.CtrlPage
@@ -166,7 +153,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsControl_Changed(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
-    private void SidebarSideRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
+
 
     private void ShortcutModeRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
