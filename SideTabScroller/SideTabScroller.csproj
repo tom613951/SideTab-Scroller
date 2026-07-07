@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>SideTabScroller</AssemblyName>
     <RootNamespace>SideTabScroller</RootNamespace>
-    <Version>0.2.5</Version>
+    <Version>0.2.6</Version>
     <Authors>SideTabScroller contributors</Authors>
     <Description>Switch Chromium side tabs with the mouse wheel on Windows.</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

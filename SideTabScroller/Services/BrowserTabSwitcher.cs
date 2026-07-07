@@ -23,14 +23,34 @@ internal sealed class BrowserTabSwitcher
     private IntPtr _originalForegroundWindow = IntPtr.Zero;
     private CancellationTokenSource? _restoreCts;
 
+    private struct BrowserCache
+    {
+        public IntPtr Handle;
+        public NativeRect Bounds;
+        public uint Dpi;
+        public string ProcessName;
+        public long ExpiryTicks;
+    }
+
+    private struct NonBrowserCache
+    {
+        public IntPtr Handle;
+        public NativeRect Bounds;
+        public long ExpiryTicks;
+    }
+
+    private BrowserCache _browserCache;
+    private NonBrowserCache _nonBrowserCache;
+
     public BrowserTabSwitcher(Func<ScrollerSettings> settingsProvider, Action<SwitchResult> onSwitch)
     {
         _settingsProvider = settingsProvider;
         _onSwitch = onSwitch;
-        _channel = Channel.CreateUnbounded<WheelTask>(new UnboundedChannelOptions
+        _channel = Channel.CreateBounded<WheelTask>(new BoundedChannelOptions(8)
         {
             SingleWriter = true,
-            SingleReader = true
+            SingleReader = true,
+            FullMode = BoundedChannelFullMode.DropOldest
         });
         StartBackgroundWorker();
     }
@@ -48,21 +68,68 @@ internal sealed class BrowserTabSwitcher
             return false;
         }
 
+        var now = DateTime.UtcNow.Ticks;
+        var direction = ResolveDirection(wheelDelta, settings);
+
+        // 1. Check Browser Cache
+        if (_browserCache.Handle != IntPtr.Zero && now < _browserCache.ExpiryTicks)
+        {
+            if (IsPointInsideSidebar(point, _browserCache.Bounds, settings, _browserCache.Dpi))
+            {
+                _channel.Writer.TryWrite(new WheelTask(_browserCache.Handle, direction, settings, _browserCache.ProcessName, now));
+                return settings.ConsumeHandledWheelEvents;
+            }
+        }
+
+        // 2. Check Non-Browser Cache
+        if (_nonBrowserCache.Handle != IntPtr.Zero && now < _nonBrowserCache.ExpiryTicks)
+        {
+            var rect = _nonBrowserCache.Bounds;
+            if (point.X >= rect.Left && point.X <= rect.Right &&
+                point.Y >= rect.Top && point.Y <= rect.Bottom)
+            {
+                return false;
+            }
+        }
+
+        // 3. Cache Miss: Resolve window
         if (!TryResolveBrowserWindow(point, settings, out var browserWindow))
         {
+            var start = NativeMethods.WindowFromPoint(point);
+            var root = NativeMethods.GetAncestor(start, NativeMethods.GaRoot);
+            if (root != IntPtr.Zero && NativeMethods.TryGetVisibleWindowBounds(root, out var nbBounds))
+            {
+                _nonBrowserCache = new NonBrowserCache
+                {
+                    Handle = root,
+                    Bounds = nbBounds,
+                    ExpiryTicks = now + TimeSpan.FromMilliseconds(800).Ticks
+                };
+            }
             return false;
         }
 
-        if (!IsPointInsideSidebar(point, browserWindow.Bounds, settings, browserWindow.Handle))
+        var dpi = NativeMethods.GetDpiForWindow(browserWindow.Handle);
+        if (dpi == 0) dpi = NativeMethods.GetDpiForSystem();
+        if (dpi == 0) dpi = 96;
+
+        // Cache the resolved browser bounds
+        _browserCache = new BrowserCache
+        {
+            Handle = browserWindow.Handle,
+            Bounds = browserWindow.Bounds,
+            Dpi = dpi,
+            ProcessName = browserWindow.ProcessName,
+            ExpiryTicks = now + TimeSpan.FromMilliseconds(800).Ticks
+        };
+
+        // Check if cursor inside sidebar bounds
+        if (!IsPointInsideSidebar(point, browserWindow.Bounds, settings, dpi))
         {
             return false;
         }
 
-        var direction = ResolveDirection(wheelDelta, settings);
-        
-        // Post task to background channel asynchronously (lock-free)
-        _channel.Writer.TryWrite(new WheelTask(browserWindow.Handle, direction, settings, browserWindow.ProcessName));
-
+        _channel.Writer.TryWrite(new WheelTask(browserWindow.Handle, direction, settings, browserWindow.ProcessName, now));
         return settings.ConsumeHandledWheelEvents;
     }
 
@@ -90,6 +157,13 @@ internal sealed class BrowserTabSwitcher
 
     private void ProcessWheelTask(WheelTask task)
     {
+        var ageTicks = DateTime.UtcNow.Ticks - task.CreatedAtTicks;
+        if (ageTicks > TimeSpan.FromMilliseconds(400).Ticks)
+        {
+            // Drop expired scroll tasks
+            return;
+        }
+
         if (FocusAndSendShortcut(task.BrowserHandle, task.Direction, task.Settings))
         {
             _onSwitch(new SwitchResult(DateTime.Now, task.ProcessName, task.Direction));
@@ -164,7 +238,12 @@ internal sealed class BrowserTabSwitcher
                     {
                         if (_originalForegroundWindow == savedOriginal)
                         {
-                            NativeMethods.SetForegroundWindow(savedOriginal);
+                            // Verify that browser is still the foreground window before switching back
+                            var currentForeground = NativeMethods.GetForegroundWindow();
+                            if (NativeMethods.IsSameRootWindow(currentForeground, browserHandle))
+                            {
+                                NativeMethods.SetForegroundWindow(savedOriginal);
+                            }
                             _originalForegroundWindow = IntPtr.Zero;
                         }
                     }
@@ -356,16 +435,8 @@ internal sealed class BrowserTabSwitcher
         }
     }
 
-    private static bool IsPointInsideSidebar(NativePoint point, NativeRect bounds, ScrollerSettings settings, IntPtr hWnd)
+    private static bool IsPointInsideSidebar(NativePoint point, NativeRect bounds, ScrollerSettings settings, uint dpi)
     {
-        // Obtain DPI scale for the target window
-        var dpi = NativeMethods.GetDpiForWindow(hWnd);
-        if (dpi == 0)
-        {
-            dpi = NativeMethods.GetDpiForSystem();
-        }
-        if (dpi == 0) dpi = 96;
-
         var scale = dpi / 96.0;
 
         var availableWidth = Math.Max(1, bounds.Width);
@@ -386,7 +457,13 @@ internal sealed class BrowserTabSwitcher
         return point.X >= bounds.Left && point.X <= bounds.Left + sidebarWidth;
     }
 
-    private readonly record struct WheelTask(IntPtr BrowserHandle, SwitchDirection Direction, ScrollerSettings Settings, string ProcessName);
+    private readonly record struct WheelTask(
+        IntPtr BrowserHandle,
+        SwitchDirection Direction,
+        ScrollerSettings Settings,
+        string ProcessName,
+        long CreatedAtTicks
+    );
 
     private readonly record struct BrowserWindow(IntPtr Handle, string ProcessName, NativeRect Bounds);
 }

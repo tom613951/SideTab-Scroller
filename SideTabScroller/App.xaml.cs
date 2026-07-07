@@ -10,11 +10,13 @@ namespace SideTabScroller;
 public partial class App : System.Windows.Application
 {
     private Mutex? _mutex;
+    private bool _ownsMutex;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         const string mutexName = @"Local\SideTabScroller-SingleInstance-Mutex";
         _mutex = new Mutex(true, mutexName, out bool createdNew);
+        _ownsMutex = createdNew;
 
         if (!createdNew)
         {
@@ -29,6 +31,7 @@ public partial class App : System.Windows.Application
             }
 
             _mutex.Dispose();
+            _mutex = null;
             Shutdown(0);
             return;
         }
@@ -59,7 +62,12 @@ public partial class App : System.Windows.Application
             var window = new MainWindow();
             MainWindow = window;
 
-            if (!e.Args.Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
+            if (e.Args.Any(arg => arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
+            {
+                // Force native Win32 window handle creation so WndProc is active and can receive wakeup broadcast message
+                new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+            }
+            else
             {
                 window.Show();
             }
@@ -80,8 +88,19 @@ public partial class App : System.Windows.Application
     {
         if (_mutex != null)
         {
-            _mutex.ReleaseMutex();
+            if (_ownsMutex)
+            {
+                try
+                {
+                    _mutex.ReleaseMutex();
+                }
+                catch
+                {
+                    // Ignore release errors
+                }
+            }
             _mutex.Dispose();
+            _mutex = null;
         }
         base.OnExit(e);
     }

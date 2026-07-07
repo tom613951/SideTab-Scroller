@@ -2,7 +2,7 @@
 
 SideTab Scroller 是一款 Windows 桌面实用小工具，当你的鼠标指针悬停在 Chromium 内核浏览器的垂直标签栏（侧栏）上时，只需滚动鼠标轮即可快速切换标签页。
 
-这是一个现代化的 C#/.NET 重写版本，设计灵感来源于 [nurupo/chrome-mouse-wheel-tab-scroller](https://github.com/nurupo/chrome-mouse-wheel-tab-scroller)。原版项目是针对 Chrome 顶部的标签栏；而本项目针对的是 Microsoft Edge、Chrome、Brave、Vivaldi 以及 Chromium 等浏览器正在使用的左侧或右侧垂直标签栏。
+这是一个现代化的 C#/.NET 重写版本，设计灵感来源于 [nurupo/chrome-mouse-wheel-tab-scroller](https://github.com/nurupo/chrome-mouse-wheel-tab-scroller)。原版项目是针对 Chrome 顶部的标签栏；而本项目针对的是 Microsoft Edge、Chrome、Brave、Vivaldi 以及 Chromium 等浏览器正在使用的左侧垂直标签栏。
 
 ## 功能亮点
 
