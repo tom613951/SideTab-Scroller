@@ -46,44 +46,53 @@ internal sealed class StartupManager
             // Ignore legacy cleanup errors
         }
 
-        try
+        if (enabled)
         {
-            if (enabled)
+            var exePath = GetExecutablePath();
+            var startInfo = new ProcessStartInfo
             {
-                var exePath = GetExecutablePath();
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = "schtasks.exe",
-                    Arguments = $"/create /tn \"SideTabScroller\" /tr \"\\\"{exePath}\\\" --minimized\" /sc onlogon /rl highest /f",
-                    CreateNoWindow = true,
-                    UseShellExecute = false
-                };
-                using var process = Process.Start(startInfo);
-                process?.WaitForExit();
+                FileName = "schtasks.exe",
+                Arguments = $"/create /tn \"SideTabScroller\" /tr \"\\\"{exePath}\\\" --minimized\" /sc onlogon /rl highest /f",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                throw new InvalidOperationException("无法启动 schtasks.exe 进程。");
             }
-            else
+            process.WaitForExit();
+            if (process.ExitCode != 0)
             {
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = "schtasks.exe",
-                    Arguments = "/delete /tn \"SideTabScroller\" /f",
-                    CreateNoWindow = true,
-                    UseShellExecute = false
-                };
-                using var process = Process.Start(startInfo);
-                process?.WaitForExit();
+                throw new System.ComponentModel.Win32Exception(process.ExitCode, $"创建开机任务失败 (错误代码: {process.ExitCode})。");
             }
         }
-        catch
+        else
         {
-            // Fail silently
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "schtasks.exe",
+                Arguments = "/delete /tn \"SideTabScroller\" /f",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                throw new InvalidOperationException("无法启动 schtasks.exe 进程。");
+            }
+            process.WaitForExit();
+            // ExitCode 1 means task not found, which we can safely ignore when disabling
+            if (process.ExitCode != 0 && process.ExitCode != 1)
+            {
+                throw new System.ComponentModel.Win32Exception(process.ExitCode, $"删除开机任务失败 (错误代码: {process.ExitCode})。");
+            }
         }
     }
 
     private static string GetExecutablePath()
     {
         return Environment.ProcessPath
-            ?? Assembly.GetEntryAssembly()?.Location
             ?? throw new InvalidOperationException("Cannot resolve the application executable path.");
     }
 }

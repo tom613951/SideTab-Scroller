@@ -12,6 +12,9 @@ internal static class NativeMethods
     internal const int GaRootOwner = 3;
     internal const int SwRestore = 9;
     internal const int DwmwaExtendedFrameBounds = 9;
+    internal const int GwlExstyle = -20;
+    internal const int WsExTransparent = 0x20;
+    internal static readonly IntPtr HwndBroadcast = new IntPtr(0xffff);
 
     internal const ushort VkControl = 0x11;
     internal const ushort VkTab = 0x09;
@@ -60,6 +63,27 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern uint GetDpiForSystem();
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    internal static extern uint RegisterWindowMessage(string lpString);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Auto)]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong", CharSet = CharSet.Auto)]
+    private static extern IntPtr GetWindowLong32(IntPtr hWnd, int nIndex);
+
+    internal static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex)
+    {
+        return IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, nIndex) : GetWindowLong32(hWnd, nIndex);
+    }
 
     [DllImport("user32.dll")]
     internal static extern IntPtr WindowFromPoint(NativePoint point);

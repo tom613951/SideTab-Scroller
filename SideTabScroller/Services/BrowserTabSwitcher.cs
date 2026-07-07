@@ -1,6 +1,11 @@
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
 using SideTabScroller.Models;
 using SideTabScroller.Native;
 
@@ -12,11 +17,22 @@ internal sealed class BrowserTabSwitcher
 
     private readonly Func<ScrollerSettings> _settingsProvider;
     private readonly Action<SwitchResult> _onSwitch;
+    private readonly Channel<WheelTask> _channel;
+
+    private readonly object _focusLock = new();
+    private IntPtr _originalForegroundWindow = IntPtr.Zero;
+    private CancellationTokenSource? _restoreCts;
 
     public BrowserTabSwitcher(Func<ScrollerSettings> settingsProvider, Action<SwitchResult> onSwitch)
     {
         _settingsProvider = settingsProvider;
         _onSwitch = onSwitch;
+        _channel = Channel.CreateUnbounded<WheelTask>(new UnboundedChannelOptions
+        {
+            SingleWriter = true,
+            SingleReader = true
+        });
+        StartBackgroundWorker();
     }
 
     public bool HandleWheel(NativePoint point, int wheelDelta)
@@ -37,19 +53,47 @@ internal sealed class BrowserTabSwitcher
             return false;
         }
 
-        if (!IsPointInsideSidebar(point, browserWindow.Bounds, settings))
+        if (!IsPointInsideSidebar(point, browserWindow.Bounds, settings, browserWindow.Handle))
         {
             return false;
         }
 
         var direction = ResolveDirection(wheelDelta, settings);
-        if (!FocusAndSendShortcut(browserWindow.Handle, direction, settings))
-        {
-            return false;
-        }
+        
+        // Post task to background channel asynchronously (lock-free)
+        _channel.Writer.TryWrite(new WheelTask(browserWindow.Handle, direction, settings, browserWindow.ProcessName));
 
-        _onSwitch(new SwitchResult(DateTime.Now, browserWindow.ProcessName, direction));
         return settings.ConsumeHandledWheelEvents;
+    }
+
+    private void StartBackgroundWorker()
+    {
+        Task.Run(async () =>
+        {
+            var reader = _channel.Reader;
+            while (await reader.WaitToReadAsync())
+            {
+                while (reader.TryRead(out var task))
+                {
+                    try
+                    {
+                        ProcessWheelTask(task);
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorLog.Write(ex);
+                    }
+                }
+            }
+        });
+    }
+
+    private void ProcessWheelTask(WheelTask task)
+    {
+        if (FocusAndSendShortcut(task.BrowserHandle, task.Direction, task.Settings))
+        {
+            _onSwitch(new SwitchResult(DateTime.Now, task.ProcessName, task.Direction));
+        }
     }
 
     private static SwitchDirection ResolveDirection(int wheelDelta, ScrollerSettings settings)
@@ -63,42 +107,72 @@ internal sealed class BrowserTabSwitcher
         return wheelUpMeansPrevious ? SwitchDirection.Previous : SwitchDirection.Next;
     }
 
-    private static bool FocusAndSendShortcut(IntPtr browserHandle, SwitchDirection direction, ScrollerSettings settings)
+    private bool FocusAndSendShortcut(IntPtr browserHandle, SwitchDirection direction, ScrollerSettings settings)
     {
-        var previousForeground = NativeMethods.GetForegroundWindow();
-        var browserAlreadyForeground = NativeMethods.IsSameRootWindow(previousForeground, browserHandle);
-
-        if (!browserAlreadyForeground)
+        lock (_focusLock)
         {
-            if (!settings.AutofocusBrowser)
+            var previousForeground = NativeMethods.GetForegroundWindow();
+            var browserAlreadyForeground = NativeMethods.IsSameRootWindow(previousForeground, browserHandle);
+
+            if (!browserAlreadyForeground)
             {
-                return false;
+                if (!settings.AutofocusBrowser)
+                {
+                    return false;
+                }
+
+                // Cancel pending restore focus task
+                _restoreCts?.Cancel();
+                _restoreCts = null;
+
+                // Save previous foreground if we haven't already
+                if (_originalForegroundWindow == IntPtr.Zero)
+                {
+                    _originalForegroundWindow = previousForeground;
+                }
+
+                if (NativeMethods.IsIconic(browserHandle))
+                {
+                    NativeMethods.ShowWindow(browserHandle, NativeMethods.SwRestore);
+                }
+
+                NativeMethods.SetForegroundWindow(browserHandle);
+                if (!WaitForForeground(browserHandle, settings.FocusDelayMilliseconds))
+                {
+                    _originalForegroundWindow = IntPtr.Zero;
+                    return false;
+                }
             }
 
-            if (NativeMethods.IsIconic(browserHandle))
+            var previous = direction == SwitchDirection.Previous;
+            var sent = settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage
+                ? NativeMethods.SendCtrlPageKey(previous)
+                : NativeMethods.SendCtrlTabKey(previous);
+
+            if (settings.RestorePreviousFocus && _originalForegroundWindow != IntPtr.Zero)
             {
-                NativeMethods.ShowWindow(browserHandle, NativeMethods.SwRestore);
+                // Cancel previous restore task
+                _restoreCts?.Cancel();
+                _restoreCts = new CancellationTokenSource();
+                var token = _restoreCts.Token;
+                var savedOriginal = _originalForegroundWindow;
+
+                Task.Delay(300, token).ContinueWith(t =>
+                {
+                    if (t.IsCanceled) return;
+                    lock (_focusLock)
+                    {
+                        if (_originalForegroundWindow == savedOriginal)
+                        {
+                            NativeMethods.SetForegroundWindow(savedOriginal);
+                            _originalForegroundWindow = IntPtr.Zero;
+                        }
+                    }
+                }, TaskScheduler.Default);
             }
 
-            NativeMethods.SetForegroundWindow(browserHandle);
-            if (!WaitForForeground(browserHandle, settings.FocusDelayMilliseconds))
-            {
-                return false;
-            }
+            return sent;
         }
-
-        var previous = direction == SwitchDirection.Previous;
-        var sent = settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage
-            ? NativeMethods.SendCtrlPageKey(previous)
-            : NativeMethods.SendCtrlTabKey(previous);
-
-        if (!browserAlreadyForeground && settings.RestorePreviousFocus && previousForeground != IntPtr.Zero)
-        {
-            Thread.Sleep(45);
-            NativeMethods.SetForegroundWindow(previousForeground);
-        }
-
-        return sent;
     }
 
     private static bool WaitForForeground(IntPtr browserHandle, int focusDelayMilliseconds)
@@ -161,7 +235,8 @@ internal sealed class BrowserTabSwitcher
         processName = string.Empty;
         bounds = default;
 
-        if (hWnd == IntPtr.Zero || !NativeMethods.IsWindowVisible(hWnd))
+        // Skip invalid, invisible or minimized windows
+        if (hWnd == IntPtr.Zero || !NativeMethods.IsWindowVisible(hWnd) || NativeMethods.IsIconic(hWnd))
         {
             return false;
         }
@@ -203,6 +278,20 @@ internal sealed class BrowserTabSwitcher
             {
                 browserWindow = new BrowserWindow(candidate, processName, bounds);
                 return true;
+            }
+        }
+
+        // If the top-level window covering the cursor is opaque (not transparent/click-through),
+        // we should NOT do Z-order fallback search because the browser is obscured.
+        var rootWindow = NativeMethods.GetAncestor(start, NativeMethods.GaRoot);
+        if (rootWindow != IntPtr.Zero)
+        {
+            var exStyle = NativeMethods.GetWindowLongPtr(rootWindow, NativeMethods.GwlExstyle).ToInt64();
+            var isTransparent = (exStyle & NativeMethods.WsExTransparent) != 0;
+            if (!isTransparent)
+            {
+                browserWindow = default;
+                return false;
             }
         }
 
@@ -267,12 +356,27 @@ internal sealed class BrowserTabSwitcher
         }
     }
 
-    private static bool IsPointInsideSidebar(NativePoint point, NativeRect bounds, ScrollerSettings settings)
+    private static bool IsPointInsideSidebar(NativePoint point, NativeRect bounds, ScrollerSettings settings, IntPtr hWnd)
     {
+        // Obtain DPI scale for the target window
+        var dpi = NativeMethods.GetDpiForWindow(hWnd);
+        if (dpi == 0)
+        {
+            dpi = NativeMethods.GetDpiForSystem();
+        }
+        if (dpi == 0) dpi = 96;
+
+        var scale = dpi / 96.0;
+
         var availableWidth = Math.Max(1, bounds.Width);
-        var sidebarWidth = Math.Min(settings.SidebarWidth, availableWidth / 2);
-        var top = bounds.Top + Math.Min(settings.TopInset, Math.Max(0, bounds.Height - 1));
-        var bottom = bounds.Bottom - Math.Min(settings.BottomInset, Math.Max(0, bounds.Height - 1));
+        var scaledSidebarWidth = (int)Math.Round(settings.SidebarWidth * scale);
+        var sidebarWidth = Math.Min(scaledSidebarWidth, availableWidth / 2);
+        
+        var scaledTopInset = (int)Math.Round(settings.TopInset * scale);
+        var top = bounds.Top + Math.Min(scaledTopInset, Math.Max(0, bounds.Height - 1));
+        
+        var scaledBottomInset = (int)Math.Round(settings.BottomInset * scale);
+        var bottom = bounds.Bottom - Math.Min(scaledBottomInset, Math.Max(0, bounds.Height - 1));
 
         if (point.Y < top || point.Y > bottom)
         {
@@ -289,6 +393,8 @@ internal sealed class BrowserTabSwitcher
             _ => insideLeft || insideRight
         };
     }
+
+    private readonly record struct WheelTask(IntPtr BrowserHandle, SwitchDirection Direction, ScrollerSettings Settings, string ProcessName);
 
     private readonly record struct BrowserWindow(IntPtr Handle, string ProcessName, NativeRect Bounds);
 }

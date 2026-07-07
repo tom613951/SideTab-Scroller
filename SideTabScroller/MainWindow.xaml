@@ -113,10 +113,25 @@
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,16" />
-                                
 
+                                <!-- Sidebar Side Selector -->
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="触发侧边" FontWeight="Medium" />
+                                        <TextBlock Text="触发切换标签页的鼠标感应区侧边" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <RadioButton x:Name="SidebarSideLeftRadio" Content="左侧" Margin="0,0,8,0" Checked="SidebarSideRadio_Checked" />
+                                        <RadioButton x:Name="SidebarSideRightRadio" Content="右侧" Margin="0,0,8,0" Checked="SidebarSideRadio_Checked" />
+                                        <RadioButton x:Name="SidebarSideAutoRadio" Content="双侧/自动" Checked="SidebarSideRadio_Checked" />
+                                    </StackPanel>
+                                </Grid>
 
-                                <!-- Sidebar Width Slider -->
+                                <Separator Margin="0,8,0,16" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
                                 <Grid Margin="0,0,0,16">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />

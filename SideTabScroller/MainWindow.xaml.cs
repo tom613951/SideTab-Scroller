@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using SideTabScroller.Models;
+using SideTabScroller.Native;
 using SideTabScroller.Services;
 
 namespace SideTabScroller;
@@ -20,6 +21,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private SwitchResult? _lastSwitch;
     private bool _allowClose;
     private bool _isLoading = true;
+    private bool _isStartupEnabledCached;
+    private uint _showMeMessage;
 
     public MainWindow()
     {
@@ -45,6 +48,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _statusTimer.Tick += (_, _) => UpdateStatusText();
         _statusTimer.Start();
         UpdateStatusText();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        _showMeMessage = NativeMethods.RegisterWindowMessage("SideTabScroller_ShowMeMessage");
+        var source = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == _showMeMessage)
+        {
+            ShowSettingsWindow();
+            handled = true;
+        }
+        return IntPtr.Zero;
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -77,7 +98,13 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         BottomInsetSlider.Value = _settings.BottomInset;
         FocusDelaySlider.Value = _settings.FocusDelayMilliseconds;
         BrowserProcessesBox.Text = string.Join(Environment.NewLine, _settings.BrowserProcessNames);
-        StartupSwitch.IsChecked = _startupManager.IsEnabled();
+        
+        _isStartupEnabledCached = _startupManager.IsEnabled();
+        StartupSwitch.IsChecked = _isStartupEnabledCached;
+
+        SidebarSideLeftRadio.IsChecked = _settings.SidebarSide == SidebarSide.Left;
+        SidebarSideRightRadio.IsChecked = _settings.SidebarSide == SidebarSide.Right;
+        SidebarSideAutoRadio.IsChecked = _settings.SidebarSide == SidebarSide.Auto;
 
         ShortcutCtrlTabRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlTab;
         ShortcutCtrlPageRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage;
@@ -104,7 +131,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _settings.FocusDelayMilliseconds = (int)Math.Round(FocusDelaySlider.Value);
         _settings.BrowserProcessNames = ParseBrowserProcessNames(BrowserProcessesBox.Text);
 
-        _settings.SidebarSide = SidebarSide.Left;
+        if (SidebarSideLeftRadio.IsChecked == true)
+        {
+            _settings.SidebarSide = SidebarSide.Left;
+        }
+        else if (SidebarSideRightRadio.IsChecked == true)
+        {
+            _settings.SidebarSide = SidebarSide.Right;
+        }
+        else
+        {
+            _settings.SidebarSide = SidebarSide.Auto;
+        }
 
         _settings.ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
             ? TabSwitchShortcutMode.CtrlPage
@@ -128,6 +166,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void SettingsControl_Changed(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
+    private void SidebarSideRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
+
     private void ShortcutModeRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
 
     private void BrowserProcessesBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => PersistSettingsFromUi();
@@ -141,13 +181,18 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         try
         {
-            _startupManager.SetEnabled(StartupSwitch.IsChecked == true);
+            var enable = StartupSwitch.IsChecked == true;
+            _startupManager.SetEnabled(enable);
+            _isStartupEnabledCached = _startupManager.IsEnabled();
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(ex.Message, "开机启动", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
             _isLoading = true;
-            StartupSwitch.IsChecked = _startupManager.IsEnabled();
+            StartupSwitch.IsChecked = _isStartupEnabledCached;
             _isLoading = false;
         }
 
@@ -228,7 +273,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             : $"上次切换 - {FormatDirection(_lastSwitch.Direction)} - {_lastSwitch.BrowserProcessName}.exe - {_lastSwitch.At:HH:mm:ss}";
 
         ConfigPathText.Text = $"配置文件 - {_settingsStore.ConfigPath}";
-        StartupStatusText.Text = _startupManager.IsEnabled()
+        StartupStatusText.Text = _isStartupEnabledCached
             ? "开机启动已启用。"
             : "开机启动未启用。";
     }
