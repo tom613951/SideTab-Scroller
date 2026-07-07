@@ -129,7 +129,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _settings.FocusDelayMilliseconds = (int)Math.Round(FocusDelaySlider.Value);
         _settings.BrowserProcessNames = ParseBrowserProcessNames(BrowserProcessesBox.Text);
 
-        _settings.SidebarSide = SidebarSide.Left;
+
 
         _settings.ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
             ? TabSwitchShortcutMode.CtrlPage
