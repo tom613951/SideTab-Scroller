@@ -48,6 +48,8 @@ public partial class App : System.Windows.Application
 
         base.OnStartup(e);
 
+        AttachParkingHwndFilter();
+
         const int wmQueryEndSession = 0x0011;
         const int wmEndSession = 0x0012;
 
@@ -55,8 +57,7 @@ public partial class App : System.Windows.Application
         {
             if (msg.message is wmQueryEndSession or wmEndSession)
             {
-                // Suppress WM_QUERYENDSESSION and WM_ENDSESSION from reaching WPF's internal HwndApp/AppFilterMessage
-                // to prevent CriticalShutdown and telemetry crashes in single-file WPF apps on deep sleep / hibernate.
+                // Suppress WM_QUERYENDSESSION and WM_ENDSESSION from reaching message loop handlers
                 handled = true;
             }
         };
@@ -74,8 +75,7 @@ public partial class App : System.Windows.Application
 
         SessionEnding += (_, args) =>
         {
-            // Cancel WPF's built-in CriticalShutdown which crashes in single-file published WPF apps
-            // and causes unintended app exit when laptop power state (AC/DC) changes.
+            // Cancel WPF's built-in CriticalShutdown
             args.Cancel = true;
         };
 
@@ -133,5 +133,60 @@ public partial class App : System.Windows.Application
             _mutex = null;
         }
         base.OnExit(e);
+    }
+
+    private void AttachParkingHwndFilter()
+    {
+        try
+        {
+            var ensureHwndSource = typeof(System.Windows.Application).GetMethod(
+                "EnsureHwndSource",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            ensureHwndSource?.Invoke(this, null);
+
+            var parkingHwndField = typeof(System.Windows.Application).GetField(
+                "_parkingHwnd",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            var parkingHwnd = parkingHwndField?.GetValue(this);
+            if (parkingHwnd != null)
+            {
+                var addHookMethod = parkingHwnd.GetType().GetMethod("AddHook");
+                if (addHookMethod != null)
+                {
+                    var hookDelegateType = parkingHwnd.GetType().Assembly.GetType("MS.Win32.HwndWrapperHook");
+                    if (hookDelegateType != null)
+                    {
+                        var hookHandler = Delegate.CreateDelegate(hookDelegateType, this, nameof(ParkingHwndHook));
+                        addHookMethod.Invoke(parkingHwnd, [hookHandler]);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+        }
+    }
+
+    private IntPtr ParkingHwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int wmQueryEndSession = 0x0011;
+        const int wmEndSession = 0x0012;
+
+        if (msg == wmQueryEndSession)
+        {
+            handled = true;
+            // Return 1 to indicate ready, never return 0 (veto)
+            return new IntPtr(1);
+        }
+
+        if (msg == wmEndSession)
+        {
+            handled = true;
+            return IntPtr.Zero;
+        }
+
+        return IntPtr.Zero;
     }
 }

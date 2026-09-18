@@ -29,6 +29,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     private const int WmPowerBroadcast = 0x0218;
     private const int PbtApmResumeAutomatic = 0x0012;
     private const int PbtApmResumeSuspend = 0x0007;
+    private const int PbtApmPowerStatusChange = 0x000A;
 
     public MainWindow()
     {
@@ -98,9 +99,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         else if (msg == WmPowerBroadcast)
         {
             var powerEvent = wParam.ToInt32();
-            if (powerEvent is PbtApmResumeAutomatic or PbtApmResumeSuspend)
+            if (powerEvent is PbtApmResumeAutomatic or PbtApmResumeSuspend or PbtApmPowerStatusChange)
             {
-                // Refresh low-level mouse hook on system resume from sleep/hibernate
+                // Refresh low-level mouse hook on system resume from sleep/hibernate or power status change
                 try
                 {
                     _mouseWheelHook.Restart();
@@ -114,6 +115,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             // Intercept power status change messages (AC/DC switching, Battery Saver toggle, GPU MUX switches)
             // so WPF does not handle them as session termination events.
             handled = true;
+            return new IntPtr(1);
         }
 
         return IntPtr.Zero;
