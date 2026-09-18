@@ -1,52 +1,53 @@
 # 侧栏滚轮标签页切换器 (SideTab Scroller)
 
-SideTab Scroller 是一款 Windows 桌面实用小工具，当你的鼠标指针悬停在 Chromium 内核浏览器的垂直标签栏（侧栏）上时，只需滚动鼠标轮即可快速切换标签页。
+SideTab Scroller 是一个 Windows 桌面工具。当鼠标指针悬停在 Chromium 内核浏览器的垂直标签栏（侧栏）区域时，通过滚动鼠标滚轮快速切换标签页。
 
-这是一个现代化的 C#/.NET 重写版本，设计灵感来源于 [nurupo/chrome-mouse-wheel-tab-scroller](https://github.com/nurupo/chrome-mouse-wheel-tab-scroller)。原版项目是针对 Chrome 顶部的标签栏；而本项目针对的是 Microsoft Edge、Chrome、Brave、Vivaldi 以及 Chromium 等浏览器正在使用的左侧垂直标签栏。
+该项目使用 C# / .NET 编写，灵感来源于 [nurupo/chrome-mouse-wheel-tab-scroller](https://github.com/nurupo/chrome-mouse-wheel-tab-scroller)。原项目主要面向传统顶部水平标签栏，本项目专门适配 Microsoft Edge、Chrome、Brave、Vivaldi 等浏览器的左侧垂直标签栏。
 
-## 功能亮点
+## 功能特性
 
-- **侧栏热区检测**：专门针对侧边栏（垂直标签栏）进行检测，而不是顶部的传统标签栏。
-- **全局鼠标钩子**：使用全局低级鼠标滚轮钩子，并支持可选的事件拦截消费（防止页面跟着滚动）。
-- **键盘快捷键模拟**：通过模拟发送 `Ctrl+PageUp` / `Ctrl+PageDown` 组合键来进行标签页切换。
-- **高度可定制化**：可自定义侧栏感应宽度、顶部留空（Top inset）和底部留空（Bottom inset）。
-- **高 DPI 屏幕完美支持**：自动适配多显示器高 DPI 缩放，确保感应区物理范围在任何分辨率下均保持一致。
-- **单实例运行保护**：引入命名 Mutex，防止多开冲突，且重复启动时会自动唤醒并置顶先前在后台的实例设置窗口。
-- **自动对焦与恢复（防抖优化）**：可选自动激活浏览器窗口，并在滚动结束 300ms 后自动恢复之前的窗口焦点，防止快速滚动时焦点剧烈交替冲突。
-- **现代化 UI 设计**：使用基于 **WPF UI** 的全新 Windows 11 / WinUI 3 风格设置界面，支持 Mica 材质背景，并带有原生 Fluent 样式的系统托盘右键菜单。
-- **管理员权限运行（完美兼容）**：默认以管理员权限运行，以绕过 Windows UIPI 限制，确保在任何置顶的高权限软件（如代理客户端 `GUI.for.SingBox`、各类调试终端、游戏等）处于焦点状态时均能正常工作。
-- **任务计划程序开机启动**：开机自启机制升级为通过 **Windows 任务计划程序 (Task Scheduler)** 注册，在用户登录时静默提权启动，彻底解决 Windows 安全策略对高权限程序注册表启动项的拦截。
-- **高性能与透明遮罩穿透**：通过 Win32 原生 `OpenProcess` API 搭配高速线程安全缓存与异步消息队列实现无延迟解析，解决滚轮触发时的鼠标移动卡顿；引入 Z 轴窗口深度与透明度遍历机制，即便侧栏上方被其他软件的透明遮罩覆盖，仍能精准识别底层浏览器，且不会误伤普通盖在其上的非透明窗口。
-- **本地配置存储**：采用 JSON 配置文件，存储在 `%APPDATA%\SideTabScroller\settings.json`。
+- **侧栏区域检测**：识别浏览器窗口左侧垂直标签栏范围。
+- **全局鼠标钩子**：基于 Win32 低级鼠标滚轮钩子（WH_MOUSE_LL）实现，支持拦截消费滚轮事件以避免页面同步上下滚动。
+- **按键模拟**：支持通过 `Ctrl+Tab` / `Ctrl+Shift+Tab` 或 `Ctrl+PageDown` / `Ctrl+PageUp` 进行标签页切换。
+- **自定义边距参数**：可自定义侧栏感应宽度、顶部留空（Top inset）和底部留空（Bottom inset）。
+- **多显示器与高 DPI 适配**：自动计算屏幕 DPI 缩放比例，保持物理感应区域一致。
+- **单实例运行保护**：通过命名互斥体（Mutex）防止重复启动，重复打开时唤醒已存在的后台窗口。
+- **窗口对焦与还原**：支持滚动时自动激活浏览器窗口，并在滚动结束后自动恢复原先的窗口焦点。
+- **界面与系统托盘**：基于 WPF UI 构建的设置界面，支持最小化到系统托盘运行。
+- **管理员权限与防穿透**：默认通过应用清单声明管理员权限，避免 Windows UIPI 限制导致在高权限窗口处于焦点时失效；支持穿透上层透明遮罩窗口准确识别底层浏览器。
+- **任务计划程序开机自启**：通过 Windows 任务计划程序（Task Scheduler）注册自启项，支持登录时静默提权运行。
+- **配置持久化**：采用 JSON 文件保存用户配置，默认存储路径为 `%APPDATA%\SideTabScroller\settings.json`。
 
 ## 构建与发布
 
-确保已安装 .NET 10 SDK，然后运行以下命令进行构建：
+环境要求：.NET 10 SDK。
+
+构建项目：
 
 ```powershell
 dotnet build .\SideTabScroller.slnx -c Release
 ```
 
-发布适用于 Windows x64 的依赖框架的单文件版本：
+发布依赖框架单文件版本（Windows x64）：
 
 ```powershell
 dotnet publish .\SideTabScroller\SideTabScroller.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
-发布适用于 Windows x64 的完全独立自包含（Self-contained）的单文件版本：
+发布独立自包含单文件版本（Windows x64）：
 
 ```powershell
-dotnet publish .\SideTabScroller\SideTabScroller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfContained=true -p:PublishReadyToRun=true
+dotnet publish .\SideTabScroller\SideTabScroller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-## 使用方法
+## 使用说明
 
-1. 启动 `SideTabScroller.exe`（请同意系统的 UAC 管理员提权提示）。
-2. 在浏览器中启用**垂直标签页**（侧栏标签）。
-3. 将鼠标悬停在侧栏标签区域，滚动鼠标滚轮。
-4. 如果你的浏览器主题、工具栏密度或侧栏宽度与默认值不同，可以在设置窗口中调整 `Sidebar width`（侧栏宽度）、`Top inset`（顶部留空）和 `Bottom inset`（底部留空）等参数。
+1. 运行 `SideTabScroller.exe`（需要确认 UAC 提权提示）。
+2. 在浏览器中开启垂直标签页模式。
+3. 将鼠标指针移动到左侧垂直标签栏区域，滚动鼠标滚轮即可切换标签页。
+4. 如浏览器侧栏宽度或上下边距与默认值不一致，可在托盘图标右键菜单中打开设置窗口进行调整。
 
 ## 开源协议
 
-GPL-3.0-only。详见 [LICENSE](LICENSE)。
+本项目采用 GPL-3.0 协议开源，详见 [LICENSE](LICENSE)。
 
