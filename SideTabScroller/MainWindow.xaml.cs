@@ -58,6 +58,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _mouseWheelHook.Start();
         _trayIcon.Update(_settings, _mouseWheelHook.IsRunning);
 
+        Task.Run(() => _startupManager.EnsureTaskConfigured());
+
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _statusTimer.Tick += (_, _) => UpdateStatusText();
         _statusTimer.Start();

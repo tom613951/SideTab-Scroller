@@ -29,6 +29,10 @@ internal sealed class MouseWheelHook : IDisposable
         using var currentProcess = Process.GetCurrentProcess();
         var moduleName = currentProcess.MainModule?.ModuleName;
         var moduleHandle = NativeMethods.GetModuleHandle(moduleName);
+        if (moduleHandle == IntPtr.Zero)
+        {
+            moduleHandle = NativeMethods.GetModuleHandle(null);
+        }
 
         _hookHandle = NativeMethods.SetWindowsHookEx(NativeMethods.WhMouseLl, _callback, moduleHandle, 0);
         if (_hookHandle == IntPtr.Zero)
