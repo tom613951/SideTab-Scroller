@@ -1,39 +1,24 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
-using System.Windows.Threading;
+using System.Windows.Controls;
 using SideTabScroller.Models;
-using SideTabScroller.Native;
 using SideTabScroller.Services;
 
 namespace SideTabScroller;
 
 public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
-    private readonly SettingsStore _settingsStore;
-    private readonly StartupManager _startupManager;
-    private readonly BrowserTabSwitcher _tabSwitcher;
-    private readonly MouseWheelHook _mouseWheelHook;
-    private readonly TrayIconService _trayIcon;
-    private readonly DispatcherTimer _statusTimer;
-
-    private ScrollerSettings _settings;
-    private SwitchResult? _lastSwitch;
-    private bool _allowClose;
+    private readonly AppController _controller;
     private bool _isLoading = true;
-    private bool _isStartupEnabledCached;
-    private uint _showMeMessage;
+    private bool _isUpdatingStartup;
+    private bool _isClosed;
 
-    private const int WmQueryEndSession = 0x0011;
-    private const int WmEndSession = 0x0012;
-    private const int WmPowerBroadcast = 0x0218;
-    private const int PbtApmResumeAutomatic = 0x0012;
-    private const int PbtApmResumeSuspend = 0x0007;
-    private const int PbtApmPowerStatusChange = 0x000A;
-
-    public MainWindow()
+    internal MainWindow(AppController controller)
     {
+        _controller = controller;
         InitializeComponent();
+
         try
         {
             Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this);
@@ -43,157 +28,132 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             // Ignore system theme watcher errors if OS theme notification fails
         }
 
-        _settingsStore = new SettingsStore();
-        _settings = _settingsStore.Load();
-        _startupManager = new StartupManager();
-        _tabSwitcher = new BrowserTabSwitcher(() => _settings, OnTabSwitched);
-        _mouseWheelHook = new MouseWheelHook(_tabSwitcher.HandleWheel);
-        _trayIcon = new TrayIconService(
-            showSettings: ShowSettingsWindow,
-            toggleEnabled: ToggleEnabled,
-            exitApplication: ExitApplication,
-            showContextMenu: ShowTrayContextMenu);
-
-        ApplySettingsToUi();
-        _mouseWheelHook.Start();
-        _trayIcon.Update(_settings, _mouseWheelHook.IsRunning);
-
-        Task.Run(() => _startupManager.EnsureTaskConfigured());
-
-        _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _statusTimer.Tick += (_, _) => UpdateStatusText();
-        _statusTimer.Start();
-        UpdateStatusText();
+        _controller.StateChanged += OnControllerStateChanged;
+        SyncAllFromController();
     }
 
-    protected override void OnSourceInitialized(EventArgs e)
+    protected override void OnClosing(CancelEventArgs e)
     {
-        base.OnSourceInitialized(e);
-        _showMeMessage = NativeMethods.RegisterWindowMessage("SideTabScroller_ShowMeMessage");
-        var source = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
-        source?.AddHook(WndProc);
-    }
-
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == _showMeMessage)
+        base.OnClosing(e);
+        if (!e.Cancel)
         {
-            ShowSettingsWindow();
-            handled = true;
-        }
-        else if (msg == WmQueryEndSession)
-        {
-            // Intercept WM_QUERYENDSESSION to prevent WPF's built-in HwndWrapper from calling
-            // CriticalShutdown() (which throws FileNotFoundException in single-file published WPF apps).
-            // Return 1 to notify Windows that this app has no unsaved data, but set handled = true
-            // so WPF internal handlers never receive the message.
-            handled = true;
-            return new IntPtr(1);
-        }
-        else if (msg == WmEndSession)
-        {
-            // Do not call ExitApplication() here. Windows OS will terminate background processes automatically
-            // if the system is shutting down or logging off. However, during Deep Sleep / Hibernate / Hybrid Sleep,
-            // Windows sends WM_ENDSESSION to save session state. Calling ExitApplication() would kill the background process.
-            handled = true;
-            return IntPtr.Zero;
-        }
-        else if (msg == WmPowerBroadcast)
-        {
-            var powerEvent = wParam.ToInt32();
-            if (powerEvent is PbtApmResumeAutomatic or PbtApmResumeSuspend or PbtApmPowerStatusChange)
+            try
             {
-                // Refresh low-level mouse hook on system resume from sleep/hibernate or power status change
-                try
-                {
-                    _mouseWheelHook.Restart();
-                }
-                catch
-                {
-                    // Non-critical failure
-                }
+                // UnWatch must run before WPF disposes the native HWND prior to OnClosed
+                Wpf.Ui.Appearance.SystemThemeWatcher.UnWatch(this);
             }
-
-            // Intercept power status change messages (AC/DC switching, Battery Saver toggle, GPU MUX switches)
-            // so WPF does not handle them as session termination events.
-            handled = true;
-            return new IntPtr(1);
+            catch
+            {
+                // Ignore unwatch errors
+            }
         }
-
-        return IntPtr.Zero;
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
+    protected override void OnClosed(EventArgs e)
     {
+        _isClosed = true;
+        _controller.StateChanged -= OnControllerStateChanged;
+        _controller.FlushPendingSave();
+        base.OnClosed(e);
     }
 
-    private void Window_Closing(object? sender, CancelEventArgs e)
+    private void OnControllerStateChanged()
     {
-        if (_allowClose)
+        if (_isClosed || Dispatcher.HasShutdownStarted)
         {
             return;
         }
 
-        e.Cancel = true;
-        Hide();
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_isClosed)
+            {
+                return;
+            }
+
+            if (!_isLoading && !_isUpdatingStartup)
+            {
+                var snapshot = _controller.Snapshot;
+                if (EnabledSwitch.IsChecked != snapshot.Enabled)
+                {
+                    _isLoading = true;
+                    EnabledSwitch.IsChecked = snapshot.Enabled;
+                    _isLoading = false;
+                }
+
+                _isLoading = true;
+                StartupSwitch.IsChecked = _controller.IsStartupEnabled;
+                _isLoading = false;
+            }
+
+            UpdateStatusText();
+        });
     }
 
-    private void ApplySettingsToUi()
+    private void SyncAllFromController()
     {
         _isLoading = true;
+        try
+        {
+            var settings = _controller.GetSettingsCopy();
+            EnabledSwitch.IsChecked = settings.Enabled;
+            ReverseSwitch.IsChecked = settings.ReverseDirection;
+            SwallowWheelSwitch.IsChecked = settings.ConsumeHandledWheelEvents;
+            IgnoreModifiersSwitch.IsChecked = settings.IgnoreWhenKeyboardModifiersPressed;
+            AutofocusSwitch.IsChecked = settings.AutofocusBrowser;
+            RestoreFocusSwitch.IsChecked = settings.RestorePreviousFocus;
+            SidebarWidthSlider.Value = settings.SidebarWidth;
+            TopInsetSlider.Value = settings.TopInset;
+            BottomInsetSlider.Value = settings.BottomInset;
+            FocusDelaySlider.Value = settings.FocusDelayMilliseconds;
+            BrowserProcessesBox.Text = string.Join(Environment.NewLine, settings.BrowserProcessNames);
 
-        EnabledSwitch.IsChecked = _settings.Enabled;
-        ReverseSwitch.IsChecked = _settings.ReverseDirection;
-        SwallowWheelSwitch.IsChecked = _settings.ConsumeHandledWheelEvents;
-        IgnoreModifiersSwitch.IsChecked = _settings.IgnoreWhenKeyboardModifiersPressed;
-        AutofocusSwitch.IsChecked = _settings.AutofocusBrowser;
-        RestoreFocusSwitch.IsChecked = _settings.RestorePreviousFocus;
-        SidebarWidthSlider.Value = _settings.SidebarWidth;
-        TopInsetSlider.Value = _settings.TopInset;
-        BottomInsetSlider.Value = _settings.BottomInset;
-        FocusDelaySlider.Value = _settings.FocusDelayMilliseconds;
-        BrowserProcessesBox.Text = string.Join(Environment.NewLine, _settings.BrowserProcessNames);
-        
-        _isStartupEnabledCached = _startupManager.IsEnabled();
-        StartupSwitch.IsChecked = _isStartupEnabledCached;
+            ShortcutCtrlTabRadio.IsChecked = settings.ShortcutMode == TabSwitchShortcutMode.CtrlTab;
+            ShortcutCtrlPageRadio.IsChecked = settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage;
 
+            StartupSwitch.IsChecked = _controller.IsStartupEnabled;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
 
-
-        ShortcutCtrlTabRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlTab;
-        ShortcutCtrlPageRadio.IsChecked = _settings.ShortcutMode == TabSwitchShortcutMode.CtrlPage;
-
-        _isLoading = false;
+        UpdateStatusText();
     }
 
-    private void PersistSettingsFromUi()
+    private void PushSettingsToController(bool saveImmediately, bool normalizeEmptyProcessList)
     {
         if (_isLoading)
         {
             return;
         }
 
-        _settings.Enabled = EnabledSwitch.IsChecked == true;
-        _settings.ReverseDirection = ReverseSwitch.IsChecked == true;
-        _settings.ConsumeHandledWheelEvents = SwallowWheelSwitch.IsChecked == true;
-        _settings.IgnoreWhenKeyboardModifiersPressed = IgnoreModifiersSwitch.IsChecked == true;
-        _settings.AutofocusBrowser = AutofocusSwitch.IsChecked == true;
-        _settings.RestorePreviousFocus = RestoreFocusSwitch.IsChecked == true;
-        _settings.SidebarWidth = (int)Math.Round(SidebarWidthSlider.Value);
-        _settings.TopInset = (int)Math.Round(TopInsetSlider.Value);
-        _settings.BottomInset = (int)Math.Round(BottomInsetSlider.Value);
-        _settings.FocusDelayMilliseconds = (int)Math.Round(FocusDelaySlider.Value);
-        _settings.BrowserProcessNames = ParseBrowserProcessNames(BrowserProcessesBox.Text);
+        var parsedProcesses = ParseBrowserProcessNames(BrowserProcessesBox.Text);
+        if (!normalizeEmptyProcessList && parsedProcesses.Count == 0)
+        {
+            // While typing/clearing the box, retain existing process list until focus leaves
+            parsedProcesses = _controller.GetSettingsCopy().BrowserProcessNames;
+        }
 
+        var updated = new ScrollerSettings
+        {
+            Enabled = EnabledSwitch.IsChecked == true,
+            ReverseDirection = ReverseSwitch.IsChecked == true,
+            ConsumeHandledWheelEvents = SwallowWheelSwitch.IsChecked == true,
+            IgnoreWhenKeyboardModifiersPressed = IgnoreModifiersSwitch.IsChecked == true,
+            AutofocusBrowser = AutofocusSwitch.IsChecked == true,
+            RestorePreviousFocus = RestoreFocusSwitch.IsChecked == true,
+            SidebarWidth = (int)Math.Round(SidebarWidthSlider.Value),
+            TopInset = (int)Math.Round(TopInsetSlider.Value),
+            BottomInset = (int)Math.Round(BottomInsetSlider.Value),
+            FocusDelayMilliseconds = (int)Math.Round(FocusDelaySlider.Value),
+            BrowserProcessNames = parsedProcesses,
+            ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
+                ? TabSwitchShortcutMode.CtrlPage
+                : TabSwitchShortcutMode.CtrlTab
+        };
 
-
-        _settings.ShortcutMode = ShortcutCtrlPageRadio.IsChecked == true
-            ? TabSwitchShortcutMode.CtrlPage
-            : TabSwitchShortcutMode.CtrlTab;
-
-        _settings.Normalize();
-        _settingsStore.Save(_settings);
-        _trayIcon.Update(_settings, _mouseWheelHook.IsRunning);
-        UpdateStatusText();
+        _controller.UpdateSettings(updated, saveImmediately);
     }
 
     private static List<string> ParseBrowserProcessNames(string text)
@@ -206,36 +166,60 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             .ToList();
     }
 
-    private void SettingsControl_Changed(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
+    private void ImmediateSettingControl_Changed(object sender, RoutedEventArgs e)
+        => PushSettingsToController(saveImmediately: true, normalizeEmptyProcessList: false);
 
+    private void DebouncedSettingControl_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        => PushSettingsToController(saveImmediately: false, normalizeEmptyProcessList: false);
 
+    private void BrowserProcessesBox_TextChanged(object sender, TextChangedEventArgs e)
+        => PushSettingsToController(saveImmediately: false, normalizeEmptyProcessList: false);
 
-    private void ShortcutModeRadio_Checked(object sender, RoutedEventArgs e) => PersistSettingsFromUi();
-
-    private void BrowserProcessesBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => PersistSettingsFromUi();
-
-    private void StartupSwitch_Changed(object sender, RoutedEventArgs e)
+    private void BrowserProcessesBox_LostFocus(object sender, RoutedEventArgs e)
     {
         if (_isLoading)
         {
             return;
         }
 
+        PushSettingsToController(saveImmediately: true, normalizeEmptyProcessList: true);
+        _isLoading = true;
         try
         {
-            var enable = StartupSwitch.IsChecked == true;
-            _startupManager.SetEnabled(enable);
-            _isStartupEnabledCached = _startupManager.IsEnabled();
+            BrowserProcessesBox.Text = string.Join(Environment.NewLine, _controller.GetSettingsCopy().BrowserProcessNames);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async void StartupSwitch_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isLoading || _isUpdatingStartup)
+        {
+            return;
+        }
+
+        _isUpdatingStartup = true;
+        StartupSwitch.IsEnabled = false;
+        bool enable = StartupSwitch.IsChecked == true;
+
+        try
+        {
+            await _controller.SetStartupEnabledAsync(enable);
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "开机启动", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, "开机启动", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
             _isLoading = true;
-            StartupSwitch.IsChecked = _isStartupEnabledCached;
+            StartupSwitch.IsChecked = _controller.IsStartupEnabled;
             _isLoading = false;
+            StartupSwitch.IsEnabled = true;
+            _isUpdatingStartup = false;
         }
 
         UpdateStatusText();
@@ -243,79 +227,43 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OpenConfigButton_Click(object sender, RoutedEventArgs e)
     {
-        _settingsStore.Save(_settings);
+        _controller.FlushPendingSave();
         Process.Start(new ProcessStartInfo
         {
-            FileName = _settingsStore.ConfigPath,
+            FileName = _controller.ConfigPath,
             UseShellExecute = true
         });
     }
 
     private void ResetButton_Click(object sender, RoutedEventArgs e)
     {
-        _settings = ScrollerSettings.CreateDefault();
-        _settingsStore.Save(_settings);
-        ApplySettingsToUi();
-        _trayIcon.Update(_settings, _mouseWheelHook.IsRunning);
-        UpdateStatusText();
-    }
-
-    private void ToggleEnabled()
-    {
-        Dispatcher.Invoke(() =>
-        {
-            _settings.Enabled = !_settings.Enabled;
-            _settingsStore.Save(_settings);
-            ApplySettingsToUi();
-            _trayIcon.Update(_settings, _mouseWheelHook.IsRunning);
-            UpdateStatusText();
-        });
-    }
-
-    private void ShowSettingsWindow()
-    {
-        Dispatcher.Invoke(() =>
-        {
-            Show();
-            WindowState = WindowState.Normal;
-            Activate();
-        });
-    }
-
-    private void ExitApplication()
-    {
-        Dispatcher.Invoke(() =>
-        {
-            _allowClose = true;
-            _statusTimer.Stop();
-            _mouseWheelHook.Dispose();
-            _trayIcon.Dispose();
-            Close();
-            System.Windows.Application.Current.Shutdown();
-        });
-    }
-
-    private void OnTabSwitched(SwitchResult result)
-    {
-        Dispatcher.BeginInvoke(() =>
-        {
-            _lastSwitch = result;
-            UpdateStatusText();
-        });
+        _controller.ResetToDefaults();
+        SyncAllFromController();
     }
 
     private void UpdateStatusText()
     {
-        StatusText.Text = _mouseWheelHook.IsRunning
-            ? $"鼠标钩子 - {(_settings.Enabled ? "正在监听" : "已停用")}"
-            : $"鼠标钩子不可用 - {_mouseWheelHook.LastError ?? "未知错误"}";
+        var snapshot = _controller.Snapshot;
+        if (!snapshot.Enabled)
+        {
+            StatusText.Text = "鼠标钩子 - 已停用";
+        }
+        else if (_controller.IsHookRunning)
+        {
+            StatusText.Text = "鼠标钩子 - 正在监听";
+        }
+        else
+        {
+            StatusText.Text = $"鼠标钩子不可用 - {_controller.HookLastError ?? "未知错误"}";
+        }
 
-        LastActionText.Text = _lastSwitch is null
+        var lastSwitch = _controller.LastSwitch;
+        LastActionText.Text = lastSwitch is null
             ? "上次切换 - 暂无"
-            : $"上次切换 - {FormatDirection(_lastSwitch.Direction)} - {_lastSwitch.BrowserProcessName}.exe - {_lastSwitch.At:HH:mm:ss}";
+            : $"上次切换 - {FormatDirection(lastSwitch.Direction)} - {lastSwitch.BrowserProcessName}.exe - {lastSwitch.At:HH:mm:ss}";
 
-        ConfigPathText.Text = $"配置文件 - {_settingsStore.ConfigPath}";
-        StartupStatusText.Text = _isStartupEnabledCached
+        ConfigPathText.Text = $"配置文件 - {_controller.ConfigPath}";
+        StartupStatusText.Text = _controller.IsStartupEnabled
             ? "开机启动已启用。"
             : "开机启动未启用。";
     }
@@ -324,33 +272,4 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         return direction == SwitchDirection.Previous ? "上一个标签页" : "下一个标签页";
     }
-
-    public void ShowTrayContextMenu()
-    {
-        var menu = (System.Windows.Controls.ContextMenu)Resources["TrayContextMenu"];
-        
-        var headerItem = (System.Windows.Controls.MenuItem)menu.Items[0];
-        var headerStack = (System.Windows.Controls.StackPanel)headerItem.Header;
-        var statusTextBlock = (System.Windows.Controls.TextBlock)headerStack.Children[1];
-        
-        statusTextBlock.Text = _mouseWheelHook.IsRunning
-            ? _settings.Enabled ? "正在监听侧边栏滚轮" : "已停用"
-            : "鼠标钩子不可用";
-
-        var toggleItem = (System.Windows.Controls.MenuItem)menu.Items[3];
-        toggleItem.Header = _settings.Enabled ? "停用" : "启用";
-        
-        var toggleIcon = (Wpf.Ui.Controls.SymbolIcon)toggleItem.Icon;
-        toggleIcon.Symbol = _settings.Enabled ? Wpf.Ui.Controls.SymbolRegular.Pause24 : Wpf.Ui.Controls.SymbolRegular.Play24;
-
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        menu.IsOpen = true;
-
-        var helper = new System.Windows.Interop.WindowInteropHelper(this);
-        Native.NativeMethods.SetForegroundWindow(helper.Handle);
-    }
-
-    private void TraySettings_Click(object sender, System.Windows.RoutedEventArgs e) => ShowSettingsWindow();
-    private void TrayToggle_Click(object sender, System.Windows.RoutedEventArgs e) => ToggleEnabled();
-    private void TrayExit_Click(object sender, System.Windows.RoutedEventArgs e) => ExitApplication();
 }

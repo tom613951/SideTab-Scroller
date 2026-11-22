@@ -3,7 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:SideTabScroller"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         mc:Ignorable="d"
         Title="侧栏滚轮切换标签"
@@ -14,44 +13,7 @@
         WindowStartupLocation="CenterScreen"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
-        Loaded="Window_Loaded"
-        Closing="Window_Closing"
         Icon="Assets/app.ico">
-    <ui:FluentWindow.Resources>
-        <ContextMenu x:Key="TrayContextMenu" Width="200">
-            <!-- Custom Header MenuItem -->
-            <MenuItem IsEnabled="False" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-                <MenuItem.Header>
-                    <StackPanel Margin="0,2,0,2">
-                        <TextBlock Text="侧栏滚轮切换标签" FontWeight="SemiBold" FontSize="12.5" />
-                        <TextBlock Text="正在监听" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0" />
-                    </StackPanel>
-                </MenuItem.Header>
-            </MenuItem>
-            
-            <Separator />
-            
-            <MenuItem Header="打开设置" Click="TraySettings_Click">
-                <MenuItem.Icon>
-                    <ui:SymbolIcon Symbol="Settings24" />
-                </MenuItem.Icon>
-            </MenuItem>
-            
-            <MenuItem Header="停用" Click="TrayToggle_Click">
-                <MenuItem.Icon>
-                    <ui:SymbolIcon Symbol="Pause24" />
-                </MenuItem.Icon>
-            </MenuItem>
-            
-            <Separator />
-            
-            <MenuItem Header="退出" Click="TrayExit_Click" Foreground="#C42B1C" FontWeight="SemiBold">
-                <MenuItem.Icon>
-                    <ui:SymbolIcon Symbol="Dismiss24" Foreground="#C42B1C" />
-                </MenuItem.Icon>
-            </MenuItem>
-        </ContextMenu>
-    </ui:FluentWindow.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -89,8 +51,8 @@
                         <ui:ToggleSwitch x:Name="EnabledSwitch"
                                          Grid.Column="1"
                                          VerticalAlignment="Center"
-                                         Checked="SettingsControl_Changed"
-                                         Unchecked="SettingsControl_Changed"
+                                         Checked="ImmediateSettingControl_Changed"
+                                         Unchecked="ImmediateSettingControl_Changed"
                                          Content="服务状态" />
                     </Grid>
                 </ui:Card>
@@ -113,7 +75,6 @@
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,16" />
-
 
                                 <Grid Margin="0,0,0,16">
                                     <Grid.RowDefinitions>
@@ -140,7 +101,7 @@
                                                Maximum="260"
                                                TickFrequency="4"
                                                IsSnapToTickEnabled="True"
-                                               ValueChanged="SettingsControl_Changed" />
+                                               ValueChanged="DebouncedSettingControl_Changed" />
                                 </Grid>
 
                                 <Separator Margin="0,8,0,16" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
@@ -171,7 +132,7 @@
                                                Maximum="180"
                                                TickFrequency="2"
                                                IsSnapToTickEnabled="True"
-                                               ValueChanged="SettingsControl_Changed" />
+                                               ValueChanged="DebouncedSettingControl_Changed" />
                                 </Grid>
 
                                 <Separator Margin="0,8,0,16" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
@@ -202,7 +163,7 @@
                                                Maximum="120"
                                                TickFrequency="2"
                                                IsSnapToTickEnabled="True"
-                                               ValueChanged="SettingsControl_Changed" />
+                                               ValueChanged="DebouncedSettingControl_Changed" />
                                 </Grid>
                             </StackPanel>
                         </ui:Card>
@@ -226,8 +187,8 @@
                                         <TextBlock Text="模拟切换标签页所发送的键盘快捷键组合" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <RadioButton x:Name="ShortcutCtrlTabRadio" Content="Ctrl+Tab" Margin="0,0,8,0" Checked="ShortcutModeRadio_Checked" />
-                                        <RadioButton x:Name="ShortcutCtrlPageRadio" Content="Ctrl+Page" Checked="ShortcutModeRadio_Checked" />
+                                        <RadioButton x:Name="ShortcutCtrlTabRadio" Content="Ctrl+Tab" Margin="0,0,8,0" Checked="ImmediateSettingControl_Changed" />
+                                        <RadioButton x:Name="ShortcutCtrlPageRadio" Content="Ctrl+Page" Checked="ImmediateSettingControl_Changed" />
                                     </StackPanel>
                                 </Grid>
 
@@ -243,7 +204,7 @@
                                         <TextBlock Text="反转滚动方向" FontWeight="Medium" />
                                         <TextBlock Text="颠倒滚轮向上/向下滚动时的标签页切换顺序" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
-                                    <ui:ToggleSwitch x:Name="ReverseSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed" />
+                                    <ui:ToggleSwitch x:Name="ReverseSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="ImmediateSettingControl_Changed" Unchecked="ImmediateSettingControl_Changed" />
                                 </Grid>
 
                                 <!-- Swallow Wheel -->
@@ -256,7 +217,7 @@
                                         <TextBlock Text="拦截已处理的滚轮事件" FontWeight="Medium" />
                                         <TextBlock Text="拦截并吞噬已被处理的滑轮消息，防止底部网页随之滚动" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
-                                    <ui:ToggleSwitch x:Name="SwallowWheelSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed" />
+                                    <ui:ToggleSwitch x:Name="SwallowWheelSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="ImmediateSettingControl_Changed" Unchecked="ImmediateSettingControl_Changed" />
                                 </Grid>
 
                                 <!-- Ignore Modifiers -->
@@ -269,7 +230,7 @@
                                         <TextBlock Text="修饰键忽略" FontWeight="Medium" />
                                         <TextBlock Text="按住 Ctrl / Alt / Shift / Win 等修饰键时忽略滚轮动作" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
-                                    <ui:ToggleSwitch x:Name="IgnoreModifiersSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed" />
+                                    <ui:ToggleSwitch x:Name="IgnoreModifiersSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="ImmediateSettingControl_Changed" Unchecked="ImmediateSettingControl_Changed" />
                                 </Grid>
 
                                 <!-- Autofocus Browser -->
@@ -282,7 +243,7 @@
                                         <TextBlock Text="自动聚焦浏览器窗口" FontWeight="Medium" />
                                         <TextBlock Text="滚动时自动将焦点转移到浏览器窗口" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
-                                    <ui:ToggleSwitch x:Name="AutofocusSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed" />
+                                    <ui:ToggleSwitch x:Name="AutofocusSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="ImmediateSettingControl_Changed" Unchecked="ImmediateSettingControl_Changed" />
                                 </Grid>
 
                                 <!-- Restore Focus -->
@@ -295,7 +256,7 @@
                                         <TextBlock Text="恢复原窗口焦点" FontWeight="Medium" />
                                         <TextBlock Text="滚动结束后尝试将活动焦点恢复到切换前的窗口" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     </StackPanel>
-                                    <ui:ToggleSwitch x:Name="RestoreFocusSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="SettingsControl_Changed" Unchecked="SettingsControl_Changed" />
+                                    <ui:ToggleSwitch x:Name="RestoreFocusSwitch" Grid.Column="1" VerticalAlignment="Center" Checked="ImmediateSettingControl_Changed" Unchecked="ImmediateSettingControl_Changed" />
                                 </Grid>
 
                                 <Separator Margin="0,8,0,16" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
@@ -326,7 +287,7 @@
                                                Maximum="120"
                                                TickFrequency="1"
                                                IsSnapToTickEnabled="True"
-                                               ValueChanged="SettingsControl_Changed" />
+                                               ValueChanged="DebouncedSettingControl_Changed" />
                                 </Grid>
                             </StackPanel>
                         </ui:Card>
@@ -346,7 +307,8 @@
                                              AcceptsReturn="True"
                                              VerticalScrollBarVisibility="Auto"
                                              Padding="10"
-                                             TextChanged="BrowserProcessesBox_TextChanged" />
+                                             TextChanged="BrowserProcessesBox_TextChanged"
+                                             LostFocus="BrowserProcessesBox_LostFocus" />
                             </StackPanel>
                         </ui:Card>
 

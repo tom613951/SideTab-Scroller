@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using SideTabScroller.Models;
 
@@ -6,10 +7,8 @@ namespace SideTabScroller.Services;
 
 internal sealed class SettingsStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+    private readonly object _ioLock = new();
 
     public string ConfigDirectory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -19,34 +18,64 @@ internal sealed class SettingsStore
 
     public ScrollerSettings Load()
     {
-        Directory.CreateDirectory(ConfigDirectory);
+        lock (_ioLock)
+        {
+            Directory.CreateDirectory(ConfigDirectory);
 
-        if (!File.Exists(ConfigPath))
-        {
-            var defaults = ScrollerSettings.CreateDefault();
-            Save(defaults);
-            return defaults;
-        }
+            if (!File.Exists(ConfigPath))
+            {
+                var defaults = ScrollerSettings.CreateDefault();
+                Save(defaults);
+                return defaults;
+            }
 
-        try
-        {
-            var settings = JsonSerializer.Deserialize<ScrollerSettings>(File.ReadAllText(ConfigPath), JsonOptions)
-                ?? ScrollerSettings.CreateDefault();
-            settings.Normalize();
-            return settings;
-        }
-        catch
-        {
-            var defaults = ScrollerSettings.CreateDefault();
-            Save(defaults);
-            return defaults;
+            try
+            {
+                var json = File.ReadAllText(ConfigPath, Utf8NoBom);
+                var settings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ScrollerSettings)
+                    ?? ScrollerSettings.CreateDefault();
+                settings.Normalize();
+                return settings;
+            }
+            catch
+            {
+                var defaults = ScrollerSettings.CreateDefault();
+                Save(defaults);
+                return defaults;
+            }
         }
     }
 
     public void Save(ScrollerSettings settings)
     {
-        Directory.CreateDirectory(ConfigDirectory);
-        settings.Normalize();
-        File.WriteAllText(ConfigPath, JsonSerializer.Serialize(settings, JsonOptions));
+        lock (_ioLock)
+        {
+            Directory.CreateDirectory(ConfigDirectory);
+            settings.Normalize();
+
+            var json = JsonSerializer.Serialize(settings, SettingsJsonContext.Default.ScrollerSettings);
+            var tempPath = ConfigPath + ".tmp";
+
+            try
+            {
+                File.WriteAllText(tempPath, json, Utf8NoBom);
+                File.Move(tempPath, ConfigPath, overwrite: true);
+            }
+            catch
+            {
+                File.WriteAllText(ConfigPath, json, Utf8NoBom);
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup failure
+                }
+            }
+        }
     }
 }

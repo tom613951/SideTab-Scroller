@@ -1,3 +1,7 @@
+using System.Collections.Frozen;
+using System.Text.Json.Serialization;
+using System.Threading;
+
 namespace SideTabScroller.Models;
 
 public sealed class ScrollerSettings
@@ -31,6 +35,25 @@ public sealed class ScrollerSettings
         };
     }
 
+    public ScrollerSettings Clone()
+    {
+        return new ScrollerSettings
+        {
+            Enabled = Enabled,
+            ReverseDirection = ReverseDirection,
+            ConsumeHandledWheelEvents = ConsumeHandledWheelEvents,
+            IgnoreWhenKeyboardModifiersPressed = IgnoreWhenKeyboardModifiersPressed,
+            AutofocusBrowser = AutofocusBrowser,
+            RestorePreviousFocus = RestorePreviousFocus,
+            ShortcutMode = ShortcutMode,
+            SidebarWidth = SidebarWidth,
+            TopInset = TopInset,
+            BottomInset = BottomInset,
+            FocusDelayMilliseconds = FocusDelayMilliseconds,
+            BrowserProcessNames = [.. BrowserProcessNames]
+        };
+    }
+
     public void Normalize()
     {
         SidebarWidth = Math.Clamp(SidebarWidth, 32, 400);
@@ -50,4 +73,62 @@ public sealed class ScrollerSettings
             BrowserProcessNames = CreateDefault().BrowserProcessNames;
         }
     }
+}
+
+internal sealed class ScrollerSettingsSnapshot
+{
+    private static int _nextVersion;
+
+    private readonly FrozenSet<string> _browserProcessNames;
+    private readonly FrozenSet<string>.AlternateLookup<ReadOnlySpan<char>> _spanLookup;
+
+    public int Version { get; }
+    public bool Enabled { get; }
+    public bool ReverseDirection { get; }
+    public bool ConsumeHandledWheelEvents { get; }
+    public bool IgnoreWhenKeyboardModifiersPressed { get; }
+    public bool AutofocusBrowser { get; }
+    public bool RestorePreviousFocus { get; }
+    public TabSwitchShortcutMode ShortcutMode { get; }
+    public int SidebarWidth { get; }
+    public int TopInset { get; }
+    public int BottomInset { get; }
+    public int FocusDelayMilliseconds { get; }
+
+    public ScrollerSettingsSnapshot(ScrollerSettings settings)
+    {
+        Version = Interlocked.Increment(ref _nextVersion);
+        Enabled = settings.Enabled;
+        ReverseDirection = settings.ReverseDirection;
+        ConsumeHandledWheelEvents = settings.ConsumeHandledWheelEvents;
+        IgnoreWhenKeyboardModifiersPressed = settings.IgnoreWhenKeyboardModifiersPressed;
+        AutofocusBrowser = settings.AutofocusBrowser;
+        RestorePreviousFocus = settings.RestorePreviousFocus;
+        ShortcutMode = settings.ShortcutMode;
+        SidebarWidth = settings.SidebarWidth;
+        TopInset = settings.TopInset;
+        BottomInset = settings.BottomInset;
+        FocusDelayMilliseconds = settings.FocusDelayMilliseconds;
+
+        _browserProcessNames = settings.BrowserProcessNames.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        _spanLookup = _browserProcessNames.GetAlternateLookup<ReadOnlySpan<char>>();
+    }
+
+    public bool TryGetMatchedBrowserName(ReadOnlySpan<char> candidate, out string matchedName)
+    {
+        if (_spanLookup.TryGetValue(candidate, out var found))
+        {
+            matchedName = found;
+            return true;
+        }
+
+        matchedName = string.Empty;
+        return false;
+    }
+}
+
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(ScrollerSettings))]
+internal partial class SettingsJsonContext : JsonSerializerContext
+{
 }

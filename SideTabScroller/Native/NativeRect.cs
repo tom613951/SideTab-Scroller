@@ -12,4 +12,7 @@ internal readonly struct NativeRect
 
     public int Width => Right - Left;
     public int Height => Bottom - Top;
+
+    public bool Contains(NativePoint point) =>
+        point.X >= Left && point.X <= Right && point.Y >= Top && point.Y <= Bottom;
 }
